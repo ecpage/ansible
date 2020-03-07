@@ -27,27 +27,29 @@ from ansible import constants as C
 from ansible.module_utils._text import to_text
 from ansible.module_utils.connection import Connection
 from ansible.module_utils.network.common.utils import load_provider
-from ansible.plugins.action.normal import ActionModule as _ActionModule
+from ansible.plugins.action.network import ActionModule as ActionNetworkModule
+from ansible.utils.display import Display
 
 try:
     from library.module_utils.network.f5.common import f5_provider_spec
-except:
+except Exception:
     from ansible.module_utils.network.f5.common import f5_provider_spec
 
-try:
-    from __main__ import display
-except ImportError:
-    from ansible.utils.display import Display
-    display = Display()
+display = Display()
 
 
-class ActionModule(_ActionModule):
+class ActionModule(ActionNetworkModule):
 
     def run(self, tmp=None, task_vars=None):
+        del tmp  # tmp no longer has any effect
+
+        module_name = self._task.action.split('.')[-1]
+        self._config_module = True if module_name == 'bigip_imish_config' else False
+        persistent_connection = self._play_context.connection.split('.')[-1]
         socket_path = None
         transport = 'rest'
 
-        if self._play_context.connection == 'network_cli':
+        if persistent_connection == 'network_cli':
             provider = self._task.args.get('provider', {})
             if any(provider.values()):
                 display.warning("'provider' is unnecessary when using 'network_cli' and will be ignored")
@@ -69,7 +71,7 @@ class ActionModule(_ActionModule):
                 command_timeout = int(provider['timeout'] or C.PERSISTENT_COMMAND_TIMEOUT)
 
                 display.vvv('using connection plugin %s' % pc.connection, pc.remote_addr)
-                connection = self._shared_loader_obj.connection_loader.get('persistent', pc, sys.stdin)
+                connection = self._shared_loader_obj.connection_loader.get('persistent', pc, sys.stdin, task_uuid=self._task._uuid)
                 connection.set_options(direct={'persistent_command_timeout': command_timeout})
 
                 socket_path = connection.run()
@@ -83,7 +85,7 @@ class ActionModule(_ActionModule):
 
                 task_vars['ansible_socket'] = socket_path
 
-        if (self._play_context.connection == 'local' and transport == 'cli') or self._play_context.connection == 'network_cli':
+        if (self._play_context.connection == 'local' and transport == 'cli') or persistent_connection == 'network_cli':
             # make sure we are in the right cli context which should be
             # enable mode and not config module
             if socket_path is None:
@@ -95,5 +97,5 @@ class ActionModule(_ActionModule):
                 conn.send_command('exit')
                 out = conn.get_prompt()
 
-        result = super(ActionModule, self).run(tmp, task_vars)
+        result = super(ActionModule, self).run(task_vars=task_vars)
         return result

@@ -24,6 +24,7 @@ import getpass
 from base64 import b64encode
 from datetime import datetime
 
+from ansible.module_utils._text import to_text
 from ansible.module_utils.urls import open_url
 from ansible.plugins.callback import CallbackBase
 
@@ -47,15 +48,19 @@ DOCUMENTATION = """
         ini:
           - section: callback_grafana_annotations
             key: grafana_url
-      validate_grafana_certs:
+        type: string
+      validate_certs:
         description: validate the SSL certificate of the Grafana server. (For HTTPS url)
         env:
           - name: GRAFANA_VALIDATE_CERT
         ini:
           - section: callback_grafana_annotations
             key: validate_grafana_certs
+          - section: callback_grafana_annotations
+            key: validate_certs
         default: True
         type: bool
+        aliases: [ validate_grafana_certs ]
       http_agent:
         description: The HTTP 'User-agent' value to set in HTTP requets.
         env:
@@ -64,6 +69,7 @@ DOCUMENTATION = """
           - section: callback_grafana_annotations
             key: http_agent
         default: 'Ansible (grafana_annotations callback)'
+        type: string
       grafana_api_key:
         description: Grafana API key, allowing to authenticate when posting on the HTTP API.
                      If not provided, grafana_login and grafana_password will
@@ -73,6 +79,7 @@ DOCUMENTATION = """
         ini:
           - section: callback_grafana_annotations
             key: grafana_api_key
+        type: string
       grafana_user:
         description: Grafana user used for authentication. Ignored if grafana_api_key is provided.
         env:
@@ -81,6 +88,7 @@ DOCUMENTATION = """
           - section: callback_grafana_annotations
             key: grafana_user
         default: ansible
+        type: string
       grafana_password:
         description: Grafana password used for authentication. Ignored if grafana_api_key is provided.
         env:
@@ -89,6 +97,7 @@ DOCUMENTATION = """
           - section: callback_grafana_annotations
             key: grafana_password
         default: ansible
+        type: string
       grafana_dashboard_id:
         description: The grafana dashboard id where the annotation shall be created.
         env:
@@ -96,13 +105,17 @@ DOCUMENTATION = """
         ini:
           - section: callback_grafana_annotations
             key: grafana_dashboard_id
-      grafana_panel_id:
-        description: The grafana panel id where the annotation shall be created.
+        type: integer
+      grafana_panel_ids:
+        description: The grafana panel ids where the annotation shall be created.
+                     Give a single integer or a comma-separated list of integers.
         env:
-          - name: GRAFANA_PANEL_ID
+          - name: GRAFANA_PANEL_IDS
         ini:
           - section: callback_grafana_annotations
-            key: grafana_panel_id
+            key: grafana_panel_ids
+        default: []
+        type: list
 """
 
 
@@ -172,12 +185,12 @@ class CallbackModule(CallbackBase):
 
         self.grafana_api_key = self.get_option('grafana_api_key')
         self.grafana_url = self.get_option('grafana_url')
-        self.validate_grafana_certs = self.get_option('validate_grafana_certs')
+        self.validate_grafana_certs = self.get_option('validate_certs')
         self.http_agent = self.get_option('http_agent')
         self.grafana_user = self.get_option('grafana_user')
         self.grafana_password = self.get_option('grafana_password')
         self.dashboard_id = self.get_option('grafana_dashboard_id')
-        self.panel_id = self.get_option('grafana_panel_id')
+        self.panel_ids = self.get_option('grafana_panel_ids')
 
         if self.grafana_api_key:
             self.headers['Authorization'] = "Bearer %s" % self.grafana_api_key
@@ -189,7 +202,7 @@ class CallbackModule(CallbackBase):
             self._display.warning('Grafana URL was not provided. The '
                                   'Grafana URL can be provided using '
                                   'the `GRAFANA_URL` environment variable.')
-        self._display.info('Grafana URL: %s' % self.grafana_url)
+        self._display.debug('Grafana URL: %s' % self.grafana_url)
 
     def v2_playbook_on_start(self, playbook):
         self.playbook = playbook._file_name
@@ -200,11 +213,7 @@ class CallbackModule(CallbackBase):
             'text': text,
             'tags': ['ansible', 'ansible_event_start', self.playbook]
         }
-        if self.dashboard_id:
-            data["dashboardId"] = int(self.dashboard_id)
-        if self.panel_id:
-            data["panelId"] = int(self.panel_id)
-        self._send_annotation(json.dumps(data))
+        self._send_annotation(data)
 
     def v2_playbook_on_stats(self, stats):
         end_time = datetime.now()
@@ -229,11 +238,7 @@ class CallbackModule(CallbackBase):
             'text': text,
             'tags': ['ansible', 'ansible_report', self.playbook]
         }
-        if self.dashboard_id:
-            data["dashboardId"] = int(self.dashboard_id)
-        if self.panel_id:
-            data["panelId"] = int(self.panel_id)
-        self._send_annotation(json.dumps(data))
+        self._send_annotations(data)
 
     def v2_runner_on_failed(self, result, **kwargs):
         text = PLAYBOOK_ERROR_TXT.format(playbook=self.playbook, hostname=self.hostname,
@@ -245,18 +250,24 @@ class CallbackModule(CallbackBase):
             'tags': ['ansible', 'ansible_event_failure', self.playbook]
         }
         self.errors += 1
+        self._send_annotations(data)
+
+    def _send_annotations(self, data):
         if self.dashboard_id:
             data["dashboardId"] = int(self.dashboard_id)
-        if self.panel_id:
-            data["panelId"] = int(self.panel_id)
-        self._send_annotation(json.dumps(data))
+        if self.panel_ids:
+            for panel_id in self.panel_ids:
+                data["panelId"] = int(panel_id)
+                self._send_annotation(data)
+        else:
+            self._send_annotation(data)
 
     def _send_annotation(self, annotation):
         try:
-            response = open_url(self.grafana_url, data=annotation, headers=self.headers,
+            response = open_url(self.grafana_url, data=json.dumps(annotation), headers=self.headers,
                                 method="POST",
                                 validate_certs=self.validate_grafana_certs,
                                 url_username=self.grafana_user, url_password=self.grafana_password,
                                 http_agent=self.http_agent, force_basic_auth=self.force_basic_auth)
         except Exception as e:
-            self._display.error('Could not submit message to Grafana: %s' % str(e))
+            self._display.error(u'Could not submit message to Grafana: %s' % to_text(e))

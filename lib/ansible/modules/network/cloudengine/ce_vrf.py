@@ -16,6 +16,9 @@
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+from __future__ import (absolute_import, division, print_function)
+__metaclass__ = type
+
 ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'status': ['preview'],
                     'supported_by': 'community'}
@@ -27,10 +30,12 @@ version_added: "2.4"
 short_description: Manages VPN instance on HUAWEI CloudEngine switches.
 description:
     - Manages VPN instance of HUAWEI CloudEngine switches.
-author: Yang yang (@CloudEngine-Ansible)
+author: Yang yang (@QijunPan)
 notes:
-    - If I(state=absent), the route will be removed, regardless of the
-      non-required options.
+    - If I(state=absent), the route will be removed, regardless of the non-required options.
+    - This module requires the netconf system service be enabled on the remote device being managed.
+    - Recommended connection is C(netconf).
+    - This module also works with C(local) connections for legacy playbooks.
 options:
     vrf:
         description:
@@ -102,7 +107,7 @@ updates:
 changed:
     description: check to see if a change was made on the device
     returned: always
-    type: boolean
+    type: bool
     sample: true
 '''
 
@@ -160,7 +165,7 @@ def build_config_xml(xmlstr):
 
 
 class Vrf(object):
-    """Manange vpn instance"""
+    """Manage vpn instance"""
 
     def __init__(self, argument_spec, ):
         self.spec = argument_spec
@@ -214,7 +219,7 @@ class Vrf(object):
 
         root = ElementTree.fromstring(xml_str)
         vpn_instances = root.findall(
-            "data/l3vpn/l3vpncomm/l3vpnInstances/l3vpnInstance")
+            "l3vpn/l3vpncomm/l3vpnInstances/l3vpnInstance")
         if vpn_instances:
             for vpn_instance in vpn_instances:
                 if vpn_instance.find('vrfName').text == self.vrf:

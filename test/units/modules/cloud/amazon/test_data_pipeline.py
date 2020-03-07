@@ -1,19 +1,11 @@
 # (c) 2017 Red Hat Inc.
 #
 # This file is part of Ansible
-#
-# Ansible is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# Ansible is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
+# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+
+# Make coding more python3-ish
+from __future__ import (absolute_import, division, print_function)
+__metaclass__ = type
 
 import os
 import json
@@ -180,33 +172,33 @@ def test_delete_pipeline(placeboify, maybe_sleep):
     assert changed is True
 
 
-def test_build_unique_id_different(placeboify, maybe_sleep):
+def test_build_unique_id_different():
     m = FakeModule(**{'name': 'ansible-unittest-1', 'description': 'test-unique-id'})
     m2 = FakeModule(**{'name': 'ansible-unittest-1', 'description': 'test-unique-id-different'})
     assert data_pipeline.build_unique_id(m) != data_pipeline.build_unique_id(m2)
 
 
-def test_build_unique_id_same(placeboify, maybe_sleep):
+def test_build_unique_id_same():
     m = FakeModule(**{'name': 'ansible-unittest-1', 'description': 'test-unique-id', 'tags': {'ansible': 'test'}})
     m2 = FakeModule(**{'name': 'ansible-unittest-1', 'description': 'test-unique-id', 'tags': {'ansible': 'test'}})
     assert data_pipeline.build_unique_id(m) == data_pipeline.build_unique_id(m2)
 
 
-def test_build_unique_id_obj(placeboify, maybe_sleep):
+def test_build_unique_id_obj():
     # check that the object can be different and the unique id should be the same; should be able to modify objects
     m = FakeModule(**{'name': 'ansible-unittest-1', 'objects': [{'first': 'object'}]})
     m2 = FakeModule(**{'name': 'ansible-unittest-1', 'objects': [{'second': 'object'}]})
     assert data_pipeline.build_unique_id(m) == data_pipeline.build_unique_id(m2)
 
 
-def test_format_tags(placeboify, maybe_sleep):
+def test_format_tags():
     unformatted_tags = {'key1': 'val1', 'key2': 'val2', 'key3': 'val3'}
     formatted_tags = data_pipeline.format_tags(unformatted_tags)
     for tag_set in formatted_tags:
         assert unformatted_tags[tag_set['key']] == tag_set['value']
 
 
-def test_format_empty_tags(placeboify, maybe_sleep):
+def test_format_empty_tags():
     unformatted_tags = {}
     formatted_tags = data_pipeline.format_tags(unformatted_tags)
     assert formatted_tags == []

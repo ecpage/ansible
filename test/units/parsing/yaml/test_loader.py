@@ -22,12 +22,11 @@ __metaclass__ = type
 
 from io import StringIO
 
-from collections import Sequence, Set, Mapping
-
-from ansible.compat.tests import unittest
+from units.compat import unittest
 
 from ansible import errors
 from ansible.module_utils.six import text_type, binary_type
+from ansible.module_utils.common._collections_compat import Sequence, Set, Mapping
 from ansible.parsing.yaml.loader import AnsibleLoader
 from ansible.parsing import vault
 from ansible.parsing.yaml.objects import AnsibleVaultEncryptedUnicode
@@ -54,12 +53,6 @@ class NameStringIO(StringIO):
 
 
 class TestAnsibleLoaderBasic(unittest.TestCase):
-
-    def setUp(self):
-        pass
-
-    def tearDown(self):
-        pass
 
     def test_parse_number(self):
         stream = StringIO(u"""

@@ -17,7 +17,9 @@ DOCUMENTATION = '''
 ---
 module: os_security_group_rule
 short_description: Add/Delete rule from an existing security group
-author: "Benno Joy (@bennojoy)"
+author:
+   - "Benno Joy (@bennojoy)"
+   - "Jeffrey van Pelt (@Thulium-Drake)"
 extends_documentation_fragment: openstack
 version_added: "2.0"
 description:
@@ -29,8 +31,8 @@ options:
      required: true
    protocol:
       description:
-        - IP protocols TCP UDP ICMP 112 (VRRP)
-      choices: ['tcp', 'udp', 'icmp', '112', None]
+        - IP protocols ANY TCP UDP ICMP 112 (VRRP) 132 (SCTP)
+      choices: ['any', 'tcp', 'udp', 'icmp', '112', '132', None]
    port_range_min:
       description:
         - Starting port
@@ -127,21 +129,28 @@ EXAMPLES = '''
     protocol: icmp
     remote_ip_prefix: 0.0.0.0/0
     project: myproj
+
+# Remove the default created egress rule for IPv4
+- os_security_group_rule:
+   cloud: mordred
+   security_group: foo
+   protocol: any
+   remote_ip_prefix: 0.0.0.0/0
 '''
 
 RETURN = '''
 id:
   description: Unique rule UUID.
-  type: string
+  type: str
   returned: state == present
 direction:
   description: The direction in which the security group rule is applied.
-  type: string
+  type: str
   sample: 'egress'
   returned: state == present
 ethertype:
   description: One of IPv4 or IPv6.
-  type: string
+  type: str
   sample: 'IPv4'
   returned: state == present
 port_range_min:
@@ -158,17 +167,17 @@ port_range_max:
   returned: state == present
 protocol:
   description: The protocol that is matched by the security group rule.
-  type: string
+  type: str
   sample: 'tcp'
   returned: state == present
 remote_ip_prefix:
   description: The remote IP prefix to be associated with this security group rule.
-  type: string
+  type: str
   sample: '0.0.0.0/0'
   returned: state == present
 security_group_id:
   description: The security group ID to associate with this security group rule.
-  type: string
+  type: str
   returned: state == present
 '''
 
@@ -201,6 +210,10 @@ def _ports_match(protocol, module_min, module_max, rule_min, rule_max):
             module_min = None
         if module_max and int(module_max) == -1:
             module_max = None
+
+    # Rules with 'any' protocol do not match ports
+    if protocol == 'any':
+        return True
 
     # Check if the user is supplying -1 or None values for full TPC/UDP port range.
     if protocol in ['tcp', 'udp'] or protocol is None:
@@ -239,16 +252,16 @@ def _find_matching_rule(module, secgroup, remotegroup):
     remote_group_id = remotegroup['id']
 
     for rule in secgroup['security_group_rules']:
-        if (protocol == rule['protocol']
-                and remote_ip_prefix == rule['remote_ip_prefix']
-                and ethertype == rule['ethertype']
-                and direction == rule['direction']
-                and remote_group_id == rule['remote_group_id']
-                and _ports_match(protocol,
-                                 module.params['port_range_min'],
-                                 module.params['port_range_max'],
-                                 rule['port_range_min'],
-                                 rule['port_range_max'])):
+        if (protocol == rule['protocol'] and
+                remote_ip_prefix == rule['remote_ip_prefix'] and
+                ethertype == rule['ethertype'] and
+                direction == rule['direction'] and
+                remote_group_id == rule['remote_group_id'] and
+                _ports_match(protocol,
+                             module.params['port_range_min'],
+                             module.params['port_range_max'],
+                             rule['port_range_min'],
+                             rule['port_range_max'])):
             return rule
     return None
 
@@ -273,7 +286,7 @@ def main():
         # NOTE(Shrews): None is an acceptable protocol value for
         # Neutron, but Nova will balk at this.
         protocol=dict(default=None,
-                      choices=[None, 'tcp', 'udp', 'icmp', '112']),
+                      choices=[None, 'any', 'tcp', 'udp', 'icmp', '112', '132']),
         port_range_min=dict(required=False, type='int'),
         port_range_max=dict(required=False, type='int'),
         remote_ip_prefix=dict(required=False, default=None),
@@ -330,6 +343,9 @@ def main():
             module.exit_json(changed=_system_state_change(module, secgroup, remotegroup))
 
         if state == 'present':
+            if module.params['protocol'] == 'any':
+                module.params['protocol'] = None
+
             if not secgroup:
                 module.fail_json(msg='Could not find security group %s' %
                                  security_group)
@@ -359,7 +375,7 @@ def main():
                 cloud.delete_security_group_rule(rule['id'])
                 changed = True
 
-            module.exit_json(changed=changed)
+        module.exit_json(changed=changed)
 
     except sdk.exceptions.OpenStackCloudException as e:
         module.fail_json(msg=str(e))

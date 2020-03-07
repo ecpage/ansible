@@ -1,22 +1,8 @@
 #!/usr/bin/python
-#
-# (c) 2018 Extreme Networks Inc.
-#
-# This file is part of Ansible
-#
-# Ansible is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# Ansible is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
-#
+
+# Copyright: (c) 2018, Extreme Networks Inc.
+# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+
 from __future__ import (absolute_import, division, print_function)
 ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'status': ['preview'],
@@ -43,7 +29,6 @@ options:
         in the device running-config.  Be sure to note the configuration
         command syntax as some commands are automatically modified by the
         device config parser.
-    default: null
     aliases: ['commands']
   src:
     description:
@@ -52,7 +37,6 @@ options:
         either be the full path on the Ansible control host or a relative
         path from the playbook or role root directory.  This argument is mutually
         exclusive with I(lines).
-    default: null
   before:
     description:
       - The ordered set of commands to push on to the command stack if
@@ -60,14 +44,12 @@ options:
         the opportunity to perform configuration commands prior to pushing
         any changes without affecting how the set of commands are matched
         against the system.
-    default: null
   after:
     description:
       - The ordered set of commands to append to the end of the command
         stack if a change needs to be made.  Just like with I(before) this
         allows the playbook designer to append a set of commands to be
         executed after the command set.
-    default: null
   match:
     description:
       - Instructs the module on the way to perform the matching of
@@ -94,11 +76,11 @@ options:
     description:
       - This argument will cause the module to create a full backup of
         the current C(running-config) from the remote device before any
-        changes are made.  The backup file is written to the C(backup)
-        folder in the playbook root directory.  If the directory does not
-        exist, it is created.
-    default: no
+        changes are made. If the C(backup_options) value is not given,
+        the backup file is written to the C(backup) folder in the playbook
+        root directory. If the directory does not exist, it is created.
     type: bool
+    default: 'no'
   running_config:
     description:
       - The module, by default, will connect to the remote device and
@@ -108,7 +90,6 @@ options:
         every task in a playbook.  The I(running_config) argument allows the
         implementer to pass in the configuration to use as the base
         config for comparison.
-    default: null
     aliases: ['config']
   defaults:
     description:
@@ -145,6 +126,7 @@ options:
       - When this option is configured as I(running), the module will
         return the before and after diff of the running-config with respect
         to any changes made to the device configuration.
+    default: running
     choices: ['running', 'startup', 'intended']
   diff_ignore_lines:
     description:
@@ -161,6 +143,28 @@ options:
         of the current device's configuration against.  When specifying this
         argument, the task should also modify the C(diff_against) value and
         set it to I(intended).
+  backup_options:
+    description:
+      - This is a dict object containing configurable options related to backup file path.
+        The value of this option is read only when C(backup) is set to I(yes), if C(backup) is set
+        to I(no) this option will be silently ignored.
+    suboptions:
+      filename:
+        description:
+          - The filename to be used to store the backup configuration. If the filename
+            is not given it will be generated based on the hostname, current time and date
+            in format defined by <hostname>_config.<current-date>@<current-time>
+      dir_path:
+        description:
+          - This option provides the path ending with directory name in which the backup
+            configuration file will be stored. If the directory does not exist it will be first
+            created and the filename is either the value of C(filename) or default filename
+            as described in C(filename) options description. If the path value is not given
+            in that case a I(backup) directory will be created in the current working directory
+            and backup configuration will be copied in C(filename) within I(backup) directory.
+        type: path
+    type: dict
+    version_added: "2.8"
 """
 
 EXAMPLES = """
@@ -188,6 +192,15 @@ EXAMPLES = """
 - name: save running to startup when modified
   exos_config:
     save_when: modified
+
+- name: configurable backup path
+  exos_config:
+    lines:
+      - configure ports 2 description-string "Master Uplink"
+    backup: yes
+    backup_options:
+      filename: backup.cfg
+      dir_path: /home/user
 """
 
 RETURN = """
@@ -204,48 +217,44 @@ commands:
 backup_path:
   description: The full path to the backup file
   returned: when backup is yes
-  type: string
+  type: str
   sample: /playbooks/ansible/backup/x870_config.2018-08-08@15:00:21
 
 """
 import re
-import time
 
-from ansible.module_utils.network.exos.exos import run_commands, get_config, load_config
+from ansible.module_utils.network.exos.exos import run_commands, get_config, load_config, get_diff
 from ansible.module_utils.basic import AnsibleModule
-from ansible.module_utils.network.common.parsing import Conditional
 from ansible.module_utils.network.common.config import NetworkConfig, dumps
-from ansible.module_utils.six import iteritems
 from ansible.module_utils._text import to_text
+from ansible.module_utils.network.common.utils import to_list
 
 __metaclass__ = type
 
 
-def get_running_config(module, current_config=None):
+def get_running_config(module, current_config=None, flags=None):
     contents = module.params['running_config']
     if not contents:
         if current_config:
             contents = current_config.config_text
         else:
-            contents = get_config(module)
-    return NetworkConfig(indent=1, contents=contents)
+            contents = get_config(module, flags=flags)
+    return contents
 
 
-def get_startup_config_text(module):
-    reply = run_commands(module, ['show switch | include "Config Selected"'])
-    match = re.search(r': +(\S+)\.cfg', to_text(reply, errors='surrogate_or_strict').strip())
+def get_startup_config(module, flags=None):
+    reply = run_commands(module, {'command': 'show switch', 'output': 'text'})
+    match = re.search(r'Config Selected: +(\S+)\.cfg', to_text(reply, errors='surrogate_or_strict').strip(), re.MULTILINE)
     if match:
         cfgname = match.group(1).strip()
-        reply = run_commands(module, ['debug cfgmgr show configuration file ' + cfgname])
+        command = ' '.join(['debug cfgmgr show configuration file', cfgname])
+        if flags:
+            command += ' '.join(to_list(flags)).strip()
+        reply = run_commands(module, {'command': command, 'output': 'text'})
         data = reply[0]
     else:
         data = ''
     return data
-
-
-def get_startup_config(module):
-    data = get_startup_config_text(module)
-    return NetworkConfig(indent=1, contents=data)
 
 
 def get_candidate(module):
@@ -253,10 +262,9 @@ def get_candidate(module):
 
     if module.params['src']:
         candidate.load(module.params['src'])
-
     elif module.params['lines']:
         candidate.add(module.params['lines'])
-
+    candidate = dumps(candidate, 'raw')
     return candidate
 
 
@@ -275,6 +283,10 @@ def save_config(module, result):
 def main():
     """ main entry point for module execution
     """
+    backup_spec = dict(
+        filename=dict(),
+        dir_path=dict(type='path')
+    )
     argument_spec = dict(
         src=dict(type='path'),
 
@@ -291,10 +303,11 @@ def main():
 
         defaults=dict(type='bool', default=False),
         backup=dict(type='bool', default=False),
+        backup_options=dict(type='dict', options=backup_spec),
 
         save_when=dict(choices=['always', 'never', 'modified', 'changed'], default='never'),
 
-        diff_against=dict(choices=['startup', 'intended', 'running']),
+        diff_against=dict(choices=['startup', 'intended', 'running'], default='running'),
         diff_ignore_lines=dict(type='list'),
     )
 
@@ -313,12 +326,15 @@ def main():
     result = {'changed': False}
 
     warnings = list()
-    result['warnings'] = warnings
+    if warnings:
+        result['warnings'] = warnings
 
     config = None
+    flags = ['detail'] if module.params['defaults'] else []
+    diff_ignore_lines = module.params['diff_ignore_lines']
 
     if module.params['backup'] or (module._diff and module.params['diff_against'] == 'running'):
-        contents = get_config(module)
+        contents = get_config(module, flags=flags)
         config = NetworkConfig(indent=1, contents=contents)
         if module.params['backup']:
             result['__backup__'] = contents
@@ -328,15 +344,17 @@ def main():
         replace = module.params['replace']
 
         candidate = get_candidate(module)
+        running = get_running_config(module, config)
 
-        if match != 'none':
-            config = get_running_config(module, config)
-            configobjs = candidate.difference(config, match=match, replace=replace)
-        else:
-            configobjs = candidate.items
+        try:
+            response = get_diff(module, candidate=candidate, running=running, diff_match=match, diff_ignore_lines=diff_ignore_lines, diff_replace=replace)
+        except ConnectionError as exc:
+            module.fail_json(msg=to_text(exc, errors='surrogate_then_replace'))
 
-        if configobjs:
-            commands = dumps(configobjs, 'commands').split('\n')
+        config_diff = response.get('config_diff')
+
+        if config_diff:
+            commands = config_diff.split('\n')
 
             if module.params['before']:
                 commands[:0] = module.params['before']
@@ -358,13 +376,11 @@ def main():
     running_config = None
     startup_config = None
 
-    diff_ignore_lines = module.params['diff_ignore_lines']
-
     if module.params['save_when'] == 'always':
         save_config(module, result)
     elif module.params['save_when'] == 'modified':
-        running = get_running_config(module).config_text
-        startup = get_startup_config(module).config_text
+        running = get_running_config(module)
+        startup = get_startup_config(module)
 
         running_config = NetworkConfig(indent=1, contents=running, ignore_lines=diff_ignore_lines)
         startup_config = NetworkConfig(indent=1, contents=startup, ignore_lines=diff_ignore_lines)
@@ -376,7 +392,7 @@ def main():
 
     if module._diff:
         if not running_config:
-            contents = get_running_config(module).config_text
+            contents = get_running_config(module)
         else:
             contents = running_config.config_text
 
@@ -392,7 +408,7 @@ def main():
 
         elif module.params['diff_against'] == 'startup':
             if not startup_config:
-                contents = get_startup_config(module).config_text
+                contents = get_startup_config(module)
             else:
                 contents = startup_config.config_text
 

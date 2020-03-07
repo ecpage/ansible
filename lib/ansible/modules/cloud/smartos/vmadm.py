@@ -33,10 +33,10 @@ options:
       - Whether or not a VM is booted when the system is rebooted.
   brand:
     required: true
-    choices: [ joyent, joyent-minimal, kvm, lx ]
+    choices: [ joyent, joyent-minimal, lx, kvm, bhyve ]
     default: joyent
     description:
-      - Type of virtual machine.
+      - Type of virtual machine. The C(bhyve) option was added in Ansible 2.10.
   boot:
     required: false
     description:
@@ -326,17 +326,17 @@ RETURN = '''
 uuid:
   description: UUID of the managed VM.
   returned: always
-  type: string
+  type: str
   sample: 'b217ab0b-cf57-efd8-cd85-958d0b80be33'
 alias:
   description: Alias of the managed VM.
   returned: When addressing a VM by alias.
-  type: string
+  type: str
   sample: 'dns-zone'
 state:
   description: State of the target, after execution.
   returned: success
-  type: string
+  type: str
   sample: 'running'
 '''
 
@@ -641,7 +641,7 @@ def main():
         brand=dict(
             default='joyent',
             type='str',
-            choices=['joyent', 'joyent-minimal', 'kvm', 'lx']
+            choices=['joyent', 'joyent-minimal', 'lx', 'kvm', 'bhyve']
         ),
         cpu_type=dict(
             default='qemu64',

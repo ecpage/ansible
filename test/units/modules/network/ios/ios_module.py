@@ -40,7 +40,7 @@ def load_fixture(name):
 
     try:
         data = json.loads(data)
-    except:
+    except Exception:
         pass
 
     fixture_data[path] = data
@@ -50,7 +50,6 @@ def load_fixture(name):
 class TestIosModule(ModuleTestCase):
 
     def execute_module(self, failed=False, changed=False, commands=None, sort=True, defaults=False):
-
         self.load_fixtures(commands)
 
         if failed:

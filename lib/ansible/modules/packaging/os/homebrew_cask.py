@@ -1,8 +1,8 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-# (c) 2013, Daniel Jaouen <dcj24@cornell.edu>
-# (c) 2016, Indrajit Raychaudhuri <irc+code@indrajit.com>
+# Copyright: (c) 2013, Daniel Jaouen <dcj24@cornell.edu>
+# Copyright: (c) 2016, Indrajit Raychaudhuri <irc+code@indrajit.com>
 #
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
@@ -10,126 +10,150 @@ from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
 
-ANSIBLE_METADATA = {'metadata_version': '1.1',
-                    'status': ['preview'],
-                    'supported_by': 'community'}
+ANSIBLE_METADATA = {
+    'metadata_version': '1.1',
+    'status': ['preview'],
+    'supported_by': 'community'
+}
 
 
 DOCUMENTATION = '''
 ---
 module: homebrew_cask
 author:
-    - "Indrajit Raychaudhuri (@indrajitr)"
-    - "Daniel Jaouen (@danieljaouen)"
-    - "Enric Lluelles (@enriclluelles)"
+- "Indrajit Raychaudhuri (@indrajitr)"
+- "Daniel Jaouen (@danieljaouen)"
+- "Enric Lluelles (@enriclluelles)"
 requirements:
-   - "python >= 2.6"
-short_description: Install/uninstall homebrew casks.
+- "python >= 2.6"
+short_description: Install and uninstall homebrew casks.
 description:
-    - Manages Homebrew casks.
+- Manages Homebrew casks.
 version_added: "1.6"
 options:
-    name:
-        description:
-            - name of cask to install/remove
-        required: true
-        aliases: ['pkg', 'package', 'cask']
-    path:
-        description:
-            - "':' separated list of paths to search for 'brew' executable."
-        default: '/usr/local/bin'
-    state:
-        description:
-            - state of the cask
-        choices: [ 'present', 'absent', 'upgraded' ]
-        default: present
-    update_homebrew:
-        description:
-            - update homebrew itself first. Note that C(brew cask update) is
-              a synonym for C(brew update).
-        type: bool
-        default: 'no'
-        aliases: ['update-brew']
-        version_added: "2.2"
-    install_options:
-        description:
-            - options flags to install a package
-        aliases: ['options']
-        version_added: "2.2"
-    accept_external_apps:
-        description:
-            - allow external apps
-        type: bool
-        default: 'no'
-        version_added: "2.5.0"
-    upgrade_all:
-        description:
-            - upgrade all casks (mutually exclusive with `upgrade`)
-        type: bool
-        default: 'no'
-        version_added: "2.5.0"
-    upgrade:
-        description:
-            - upgrade all casks (mutually exclusive with `upgrade_all`)
-        type: bool
-        default: 'no'
-        version_added: "2.5.0"
-    greedy:
-        description:
-            - upgrade casks that auto update; passes --greedy to brew cask
-              outdated when checking if an installed cask has a newer version
-              available
-        type: bool
-        default: 'no'
-        version_added: "2.7.0"
+  name:
+    description:
+    - Name of cask to install or remove.
+    required: true
+    aliases: ['pkg', 'package', 'cask']
+    type: list
+  path:
+    description:
+    - "':' separated list of paths to search for 'brew' executable."
+    default: '/usr/local/bin'
+    type: path
+  state:
+    description:
+    - State of the cask.
+    choices: [ 'present', 'absent', 'upgraded' ]
+    default: present
+    type: str
+  sudo_password:
+    description:
+    - The sudo password to be passed to SUDO_ASKPASS.
+    required: false
+    version_added: 2.8
+    type: str
+  update_homebrew:
+    description:
+    - Update homebrew itself first.
+    - Note that C(brew cask update) is a synonym for C(brew update).
+    type: bool
+    default: 'no'
+    aliases: ['update-brew']
+    version_added: "2.2"
+  install_options:
+    description:
+    - Options flags to install a package.
+    aliases: ['options']
+    version_added: "2.2"
+    type: list
+  accept_external_apps:
+    description:
+    - Allow external apps.
+    type: bool
+    default: 'no'
+    version_added: "2.5.0"
+  upgrade_all:
+    description:
+    - Upgrade all casks.
+    - Mutually exclusive with C(upgraded) state.
+    type: bool
+    default: 'no'
+    version_added: "2.5.0"
+    aliases: ['upgrade']
+  greedy:
+    description:
+    - Upgrade casks that auto update.
+    - Passes --greedy to brew cask outdated when checking
+      if an installed cask has a newer version available.
+    type: bool
+    default: 'no'
+    version_added: "2.7.0"
 '''
 EXAMPLES = '''
-- homebrew_cask:
+- name: Install cask
+  homebrew_cask:
     name: alfred
     state: present
 
-- homebrew_cask:
+- name: Remove cask
+  homebrew_cask:
     name: alfred
     state: absent
 
-- homebrew_cask:
+- name: Install cask with install options
+  homebrew_cask:
     name: alfred
     state: present
     install_options: 'appdir=/Applications'
 
-- homebrew_cask:
+- name: Install cask with install options
+  homebrew_cask:
     name: alfred
     state: present
     install_options: 'debug,appdir=/Applications'
 
-- homebrew_cask:
+- name: Allow external app
+  homebrew_cask:
     name: alfred
     state: present
-    allow_external_apps: True
+    accept_external_apps: True
 
-- homebrew_cask:
+- name: Remove cask with force option
+  homebrew_cask:
     name: alfred
     state: absent
     install_options: force
 
-- homebrew_cask:
+- name: Upgrade all casks
+  homebrew_cask:
     upgrade_all: true
 
-- homebrew_cask:
+- name: Upgrade given cask with force option
+  homebrew_cask:
     name: alfred
     state: upgraded
     install_options: force
 
-- homebrew_cask:
+- name: Upgrade cask with greedy option
+  homebrew_cask:
     name: 1password
     state: upgraded
     greedy: True
 
+- name: Using sudo password for installing cask
+  homebrew_cask:
+    name: wireshark
+    state: present
+    sudo_password: "{{ ansible_become_pass }}"
 '''
 
-import os.path
+import os
 import re
+import tempfile
 
+from ansible.module_utils._text import to_bytes
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.six import iteritems, string_types
 
@@ -347,14 +371,15 @@ class HomebrewCask(object):
     # /class properties -------------------------------------------- }}}
 
     def __init__(self, module, path=path, casks=None, state=None,
-                 update_homebrew=False, install_options=None,
-                 accept_external_apps=False, upgrade_all=False,
-                 greedy=False):
+                 sudo_password=None, update_homebrew=False,
+                 install_options=None, accept_external_apps=False,
+                 upgrade_all=False, greedy=False):
         if not install_options:
             install_options = list()
         self._setup_status_vars()
         self._setup_instance_vars(module=module, path=path, casks=casks,
-                                  state=state, update_homebrew=update_homebrew,
+                                  state=state, sudo_password=sudo_password,
+                                  update_homebrew=update_homebrew,
                                   install_options=install_options,
                                   accept_external_apps=accept_external_apps,
                                   upgrade_all=upgrade_all,
@@ -449,10 +474,10 @@ class HomebrewCask(object):
         ]
         rc, out, err = self.module.run_command(cmd)
 
-        if re.search(r'Error: Cask .* is not installed.', err):
-            return False
-        else:
+        if rc == 0:
             return True
+        else:
+            return False
     # /checks ------------------------------------------------------ }}}
 
     # commands ----------------------------------------------------- {{{
@@ -471,6 +496,25 @@ class HomebrewCask(object):
         self.failed = True
         self.message = "You must select a cask to install."
         raise HomebrewCaskException(self.message)
+
+    # sudo_password fix ---------------------- {{{
+    def _run_command_with_sudo_password(self, cmd):
+        rc, out, err = '', '', ''
+
+        with tempfile.NamedTemporaryFile() as sudo_askpass_file:
+            sudo_askpass_file.write(b"#!/bin/sh\n\necho '%s'\n" % to_bytes(self.sudo_password))
+            os.chmod(sudo_askpass_file.name, 0o700)
+            sudo_askpass_file.file.close()
+
+            rc, out, err = self.module.run_command(
+                cmd,
+                environ_update={'SUDO_ASKPASS': sudo_askpass_file.name}
+            )
+
+            self.module.add_cleanup_file(sudo_askpass_file.name)
+
+        return (rc, out, err)
+    # /sudo_password fix --------------------- }}}
 
     # updated -------------------------------- {{{
     def _update_homebrew(self):
@@ -505,11 +549,19 @@ class HomebrewCask(object):
             self.message = 'Casks would be upgraded.'
             raise HomebrewCaskException(self.message)
 
-        rc, out, err = self.module.run_command([
-            self.brew_path,
-            'cask',
-            'upgrade',
-        ])
+        opts = (
+            [self.brew_path, 'cask', 'upgrade']
+        )
+
+        cmd = [opt for opt in opts if opt]
+
+        rc, out, err = '', '', ''
+
+        if self.sudo_password:
+            rc, out, err = self._run_command_with_sudo_password(cmd)
+        else:
+            rc, out, err = self.module.run_command(cmd)
+
         if rc == 0:
             if re.search(r'==> No Casks to upgrade', out.strip(), re.IGNORECASE):
                 self.message = 'Homebrew casks already upgraded.'
@@ -552,7 +604,13 @@ class HomebrewCask(object):
         )
 
         cmd = [opt for opt in opts if opt]
-        rc, out, err = self.module.run_command(cmd)
+
+        rc, out, err = '', '', ''
+
+        if self.sudo_password:
+            rc, out, err = self._run_command_with_sudo_password(cmd)
+        else:
+            rc, out, err = self.module.run_command(cmd)
 
         if self._current_cask_is_installed():
             self.changed_count += 1
@@ -610,7 +668,13 @@ class HomebrewCask(object):
             + [self.current_cask]
         )
         cmd = [opt for opt in opts if opt]
-        rc, out, err = self.module.run_command(cmd)
+
+        rc, out, err = '', '', ''
+
+        if self.sudo_password:
+            rc, out, err = self._run_command_with_sudo_password(cmd)
+        else:
+            rc, out, err = self.module.run_command(cmd)
 
         if self._current_cask_is_installed() and not self._current_cask_is_outdated():
             self.changed_count += 1
@@ -651,11 +715,19 @@ class HomebrewCask(object):
             )
             raise HomebrewCaskException(self.message)
 
-        cmd = [opt
-               for opt in (self.brew_path, 'cask', 'uninstall', self.current_cask)
-               if opt]
+        opts = (
+            [self.brew_path, 'cask', 'uninstall', self.current_cask]
+            + self.install_options
+        )
 
-        rc, out, err = self.module.run_command(cmd)
+        cmd = [opt for opt in opts if opt]
+
+        rc, out, err = '', '', ''
+
+        if self.sudo_password:
+            rc, out, err = self._run_command_with_sudo_password(cmd)
+        else:
+            rc, out, err = self.module.run_command(cmd)
 
         if not self._current_cask_is_installed():
             self.changed_count += 1
@@ -697,6 +769,11 @@ def main():
                     "latest", "upgraded",
                     "absent", "removed", "uninstalled",
                 ],
+            ),
+            sudo_password=dict(
+                type="str",
+                required=False,
+                no_log=True,
             ),
             update_homebrew=dict(
                 default=False,
@@ -746,6 +823,8 @@ def main():
     if state in ('absent', 'removed', 'uninstalled'):
         state = 'absent'
 
+    sudo_password = p['sudo_password']
+
     update_homebrew = p['update_homebrew']
     upgrade_all = p['upgrade_all']
     greedy = p['greedy']
@@ -756,7 +835,8 @@ def main():
     accept_external_apps = p['accept_external_apps']
 
     brew_cask = HomebrewCask(module=module, path=path, casks=casks,
-                             state=state, update_homebrew=update_homebrew,
+                             state=state, sudo_password=sudo_password,
+                             update_homebrew=update_homebrew,
                              install_options=install_options,
                              accept_external_apps=accept_external_apps,
                              upgrade_all=upgrade_all,

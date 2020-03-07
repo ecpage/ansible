@@ -16,7 +16,7 @@ DOCUMENTATION = """
 module: edgeos_config
 version_added: "2.5"
 author:
-    - "Nathaniel Case (@qalthos)"
+    - "Nathaniel Case (@Qalthos)"
     - "Sam Doran (@samdoran)"
 short_description: Manage EdgeOS configuration on remote device
 description:
@@ -59,10 +59,10 @@ options:
     description:
       - The C(backup) argument will backup the current device's active
         configuration to the Ansible control host prior to making any
-        changes. The backup file will be located in the backup folder
-        in the playbook root directory or role root directory if the
-        playbook is part of an ansible role. If the directory does not
-        exist, it is created.
+        changes. If the C(backup_options) value is not given, the backup
+        file will be located in the backup folder in the playbook root
+        directory or role root directory if the playbook is part of an
+        ansible role. If the directory does not exist, it is created.
     type: bool
     default: 'no'
   comment:
@@ -85,6 +85,28 @@ options:
         active configuration is saved.
     type: bool
     default: 'no'
+  backup_options:
+    description:
+      - This is a dict object containing configurable options related to backup file path.
+        The value of this option is read only when C(backup) is set to I(yes), if C(backup) is set
+        to I(no) this option will be silently ignored.
+    suboptions:
+      filename:
+        description:
+          - The filename to be used to store the backup configuration. If the filename
+            is not given it will be generated based on the hostname, current time and date
+            in format defined by <hostname>_config.<current-date>@<current-time>
+      dir_path:
+        description:
+          - This option provides the path ending with directory name in which the backup
+            configuration file will be stored. If the directory does not exist it will be first
+            created and the filename is either the value of C(filename) or default filename
+            as described in C(filename) options description. If the path value is not given
+            in that case a I(backup) directory will be created in the current working directory
+            and backup configuration will be copied in C(filename) within I(backup) directory.
+        type: path
+    type: dict
+    version_added: "2.8"
 """
 
 EXAMPLES = """
@@ -99,6 +121,14 @@ EXAMPLES = """
   edgeos_config:
     src: edgeos.cfg
     backup: yes
+
+- name: configurable backup path
+  edgeos_config:
+    src: edgeos.cfg
+    backup: yes
+    backup_options:
+      filename: backup.cfg
+      dir_path: /home/user
 """
 
 RETURN = """
@@ -107,15 +137,10 @@ commands:
   returned: always
   type: list
   sample: ['...', '...']
-filtered:
-  description: The list of configuration commands removed to avoid a load failure
-  returned: always
-  type: list
-  sample: ['...', '...']
 backup_path:
   description: The full path to the backup file
   returned: when backup is yes
-  type: string
+  type: str
   sample: /playbooks/ansible/backup/edgeos_config.2016-07-16@22:28:34
 """
 
@@ -128,10 +153,6 @@ from ansible.module_utils.network.edgeos.edgeos import load_config, get_config, 
 
 
 DEFAULT_COMMENT = 'configured by edgeos_config'
-
-CONFIG_FILTERS = [
-    re.compile(r'set system login user \S+ authentication encrypted-password')
-]
 
 
 def config_to_commands(config):
@@ -165,15 +186,34 @@ def get_candidate(module):
     return config_to_commands(contents)
 
 
-def diff_config(commands, config):
-    config = [to_native(c).replace("'", '') for c in config.splitlines()]
+def check_command(module, command):
+    """Tests against a command line to be valid otherwise raise errors
+
+    Error on uneven single quote which breaks ansible waiting for further input. Ansible
+    will handle even single quote failures correctly.
+
+    :param command: the command line from current or new config
+    :type command: string
+    :raises ValueError:
+      * if contains odd number of single quotes
+    :return: command string unchanged
+    :rtype: string
+    """
+    if command.count("'") % 2 != 0:
+        module.fail_json(msg="Unmatched single (') quote found in command: " + command)
+
+    return command
+
+
+def diff_config(module, commands, config):
+    config = [to_native(check_command(module, c)) for c in config.splitlines()]
 
     updates = list()
     visited = set()
     delete_commands = [line for line in commands if line.startswith('delete')]
 
     for line in commands:
-        item = to_native(line).replace("'", '')
+        item = to_native(check_command(module, line))
 
         if not item.startswith('set') and not item.startswith('delete'):
             raise ValueError('line must start with either `set` or `delete`')
@@ -204,15 +244,6 @@ def diff_config(commands, config):
     return list(updates)
 
 
-def sanitize_config(config, result):
-    result['filtered'] = list()
-    for regex in CONFIG_FILTERS:
-        for index, line in enumerate(list(config)):
-            if regex.search(line):
-                result['filtered'].append(line)
-                del config[index]
-
-
 def run(module, result):
     # get the current active config from the node or passed in via
     # the config param
@@ -222,8 +253,7 @@ def run(module, result):
     candidate = get_candidate(module)
 
     # create loadable config that includes only the configuration updates
-    commands = diff_config(candidate, config)
-    sanitize_config(commands, result)
+    commands = diff_config(module, candidate, config)
 
     result['commands'] = commands
 
@@ -233,14 +263,15 @@ def run(module, result):
     if commands:
         load_config(module, commands, commit=commit, comment=comment)
 
-        if result.get('filtered'):
-            result['warnings'].append('Some configuration commands were '
-                                      'removed, please see the filtered key')
-
         result['changed'] = True
 
 
 def main():
+
+    backup_spec = dict(
+        filename=dict(),
+        dir_path=dict(type='path')
+    )
     spec = dict(
         src=dict(type='path'),
         lines=dict(type='list'),
@@ -252,6 +283,7 @@ def main():
         config=dict(),
 
         backup=dict(type='bool', default=False),
+        backup_options=dict(type='dict', options=backup_spec),
         save=dict(type='bool', default=False),
     )
 

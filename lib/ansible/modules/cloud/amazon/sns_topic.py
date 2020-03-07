@@ -9,15 +9,15 @@ __metaclass__ = type
 
 ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'status': ['stableinterface'],
-                    'supported_by': 'certified'}
+                    'supported_by': 'community'}
 
 
 DOCUMENTATION = """
 module: sns_topic
 short_description: Manages AWS SNS topics and subscriptions
 description:
-    - The C(sns_topic) module allows you to create, delete, and manage subscriptions for AWS SNS topics. As of 2.6,
-      this module can be use to subscribe and unsubscribe to topics outside of your AWS account.
+    - The M(sns_topic) module allows you to create, delete, and manage subscriptions for AWS SNS topics.
+    - As of 2.6, this module can be use to subscribe and unsubscribe to topics outside of your AWS account.
 version_added: 2.0
 author:
   - "Joel Thompson (@joelthompson)"
@@ -26,22 +26,27 @@ author:
 options:
   name:
     description:
-      - The name or ARN of the SNS topic to manage
-    required: True
+      - The name or ARN of the SNS topic to manage.
+    required: true
+    type: str
   state:
     description:
-      - Whether to create or destroy an SNS topic
+      - Whether to create or destroy an SNS topic.
     default: present
     choices: ["absent", "present"]
+    type: str
   display_name:
     description:
-      - Display name of the topic
+      - Display name of the topic.
+    type: str
   policy:
     description:
-      - Policy to apply to the SNS topic
+      - Policy to apply to the SNS topic.
+    type: dict
   delivery_policy:
     description:
-      - Delivery policy to apply to the SNS topic
+      - Delivery policy to apply to the SNS topic.
+    type: dict
   subscriptions:
     description:
       - List of subscriptions to apply to the topic. Note that AWS requires
@@ -49,11 +54,13 @@ options:
         subscriptions.
     suboptions:
       endpoint:
-        description: Endpoint of subscription
-        required: yes
+        description: Endpoint of subscription.
+        required: true
       protocol:
-        description: Protocol of subscription
-        required: yes
+        description: Protocol of subscription.
+        required: true
+    type: list
+    elements: dict
     default: []
   purge_subscriptions:
     description:
@@ -62,7 +69,8 @@ options:
         exist and would be purged, they are silently skipped. This means that
         somebody could come back later and confirm the subscription. Sorry.
         Blame Amazon."
-    default: 'yes'
+    default: true
+    type: bool
 extends_documentation_fragment:
   - aws
   - ec2
@@ -98,7 +106,7 @@ EXAMPLES = """
 RETURN = '''
 sns_arn:
     description: The ARN of the topic you are modifying
-    type: string
+    type: str
     returned: always
     sample: "arn:aws:sns:us-east-2:111111111111:my_topic_name"
 sns_topic:
@@ -119,36 +127,36 @@ sns_topic:
     delivery_policy:
       description: Delivery policy for the SNS topic
       returned: when topic is owned by this AWS account
-      type: string
+      type: str
       sample: >
         {"http":{"defaultHealthyRetryPolicy":{"minDelayTarget":20,"maxDelayTarget":20,"numRetries":3,"numMaxDelayRetries":0,
         "numNoDelayRetries":0,"numMinDelayRetries":0,"backoffFunction":"linear"},"disableSubscriptionOverrides":false}}
     display_name:
       description: Display name for SNS topic
       returned: when topic is owned by this AWS account
-      type: string
+      type: str
       sample: My topic name
     name:
       description: Topic name
       returned: always
-      type: string
+      type: str
       sample: ansible-test-dummy-topic
     owner:
       description: AWS account that owns the topic
       returned: when topic is owned by this AWS account
-      type: string
+      type: str
       sample: '111111111111'
     policy:
       description: Policy for the SNS topic
       returned: when topic is owned by this AWS account
-      type: string
+      type: str
       sample: >
         {"Version":"2012-10-17","Id":"SomePolicyId","Statement":[{"Sid":"ANewSid","Effect":"Allow","Principal":{"AWS":"arn:aws:iam::111111111111:root"},
         "Action":"sns:Subscribe","Resource":"arn:aws:sns:us-east-2:111111111111:ansible-test-dummy-topic","Condition":{"StringEquals":{"sns:Protocol":"email"}}}]}
     state:
       description: whether the topic is present or absent
       returned: always
-      type: string
+      type: str
       sample: present
     subscriptions:
       description: List of subscribers to the topic in this AWS account
@@ -163,13 +171,13 @@ sns_topic:
     subscriptions_confirmed:
       description: Count of confirmed subscriptions
       returned: when topic is owned by this AWS account
-      type: list
-      sample: []
+      type: str
+      sample: '0'
     subscriptions_deleted:
       description: Count of deleted subscriptions
       returned: when topic is owned by this AWS account
-      type: list
-      sample: []
+      type: str
+      sample: '0'
     subscriptions_existing:
       description: List of existing subscriptions
       returned: always
@@ -183,7 +191,7 @@ sns_topic:
     subscriptions_pending:
       description: Count of pending subscriptions
       returned: when topic is owned by this AWS account
-      type: string
+      type: str
       sample: '0'
     subscriptions_purge:
       description: Whether or not purge_subscriptions was set
@@ -193,7 +201,7 @@ sns_topic:
     topic_arn:
       description: ARN of the SNS topic (equivalent to sns_arn)
       returned: when topic is owned by this AWS account
-      type: string
+      type: str
       sample: arn:aws:sns:us-east-2:111111111111:ansible-test-dummy-topic
     topic_created:
       description: Whether the topic was created
@@ -209,13 +217,14 @@ sns_topic:
 
 import json
 import re
+import copy
 
 try:
     import botocore
 except ImportError:
     pass  # handled by AnsibleAWSModule
 
-from ansible.module_utils.aws.core import AnsibleAWSModule
+from ansible.module_utils.aws.core import AnsibleAWSModule, is_boto3_error_code
 from ansible.module_utils.ec2 import compare_policies, AWSRetry, camel_dict_to_snake_dict
 
 
@@ -256,12 +265,12 @@ class SnsTopicManager(object):
         paginator = self.connection.get_paginator('list_topics')
         return paginator.paginate().build_full_result()['Topics']
 
-    @AWSRetry.jittered_backoff()
+    @AWSRetry.jittered_backoff(catch_extra_error_codes=['NotFound'])
     def _list_topic_subscriptions_with_backoff(self):
         paginator = self.connection.get_paginator('list_subscriptions_by_topic')
         return paginator.paginate(TopicArn=self.topic_arn).build_full_result()['Subscriptions']
 
-    @AWSRetry.jittered_backoff()
+    @AWSRetry.jittered_backoff(catch_extra_error_codes=['NotFound'])
     def _list_subscriptions_with_backoff(self):
         paginator = self.connection.get_paginator('list_subscriptions')
         return paginator.paginate().build_full_result()['Subscriptions']
@@ -289,6 +298,20 @@ class SnsTopicManager(object):
                 self.module.fail_json_aws(e, msg="Couldn't create topic %s" % self.name)
             self.topic_arn = response['TopicArn']
         return True
+
+    def _compare_delivery_policies(self, policy_a, policy_b):
+        _policy_a = copy.deepcopy(policy_a)
+        _policy_b = copy.deepcopy(policy_b)
+        # AWS automatically injects disableSubscriptionOverrides if you set an
+        # http policy
+        if 'http' in policy_a:
+            if 'disableSubscriptionOverrides' not in policy_a['http']:
+                _policy_a['http']['disableSubscriptionOverrides'] = False
+        if 'http' in policy_b:
+            if 'disableSubscriptionOverrides' not in policy_b['http']:
+                _policy_b['http']['disableSubscriptionOverrides'] = False
+        comparison = (_policy_a != _policy_b)
+        return comparison
 
     def _set_topic_attrs(self):
         changed = False
@@ -318,7 +341,7 @@ class SnsTopicManager(object):
                     self.module.fail_json_aws(e, msg="Couldn't set topic policy")
 
         if self.delivery_policy and ('DeliveryPolicy' not in topic_attributes or
-                                     compare_policies(self.delivery_policy, json.loads(topic_attributes['DeliveryPolicy']))):
+                                     self._compare_delivery_policies(self.delivery_policy, json.loads(topic_attributes['DeliveryPolicy']))):
             changed = True
             self.attributes_set.append('delivery_policy')
             if not self.check_mode:
@@ -367,13 +390,15 @@ class SnsTopicManager(object):
     def _list_topic_subscriptions(self):
         try:
             return self._list_topic_subscriptions_with_backoff()
-        except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
+        except is_boto3_error_code('AuthorizationError'):
             try:
                 # potentially AuthorizationError when listing subscriptions for third party topic
                 return [sub for sub in self._list_subscriptions_with_backoff()
                         if sub['TopicArn'] == self.topic_arn]
             except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
                 self.module.fail_json_aws(e, msg="Couldn't get subscriptions list for topic %s" % self.topic_arn)
+        except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:  # pylint: disable=duplicate-except
+            self.module.fail_json_aws(e, msg="Couldn't get subscriptions list for topic %s" % self.topic_arn)
 
     def _delete_subscriptions(self):
         # NOTE: subscriptions in 'PendingConfirmation' timeout in 3 days

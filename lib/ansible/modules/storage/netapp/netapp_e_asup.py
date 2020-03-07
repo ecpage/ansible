@@ -14,7 +14,7 @@ ANSIBLE_METADATA = {'metadata_version': '1.1',
 DOCUMENTATION = """
 ---
 module: netapp_e_asup
-short_description: manage E-Series auto-support settings
+short_description: NetApp E-Series manage auto-support settings
 description:
     - Allow the auto-support settings to be configured for an individual E-Series storage-system
 version_added: '2.7'
@@ -117,7 +117,7 @@ RETURN = """
 msg:
     description: Success message
     returned: on success
-    type: string
+    type: str
     sample: The settings have been updated.
 asup:
     description:

@@ -2,6 +2,9 @@
 # Copyright (c) 2017 Ansible Project
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
+from __future__ import (absolute_import, division, print_function)
+__metaclass__ = type
+
 ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'status': ['preview'],
                     'supported_by': 'community'}
@@ -10,7 +13,7 @@ ANSIBLE_METADATA = {'metadata_version': '1.1',
 DOCUMENTATION = '''
 ---
 module: aws_direct_connect_virtual_interface
-short_description: Manage Direct Connect virtual interfaces.
+short_description: Manage Direct Connect virtual interfaces
 description:
   - Create, delete, or modify a Direct Connect public or private virtual interface.
 version_added: "2.5"
@@ -23,10 +26,14 @@ options:
     description:
       - The desired state of the Direct Connect virtual interface.
     choices: [present, absent]
+    type: str
+    required: true
   id_to_associate:
     description:
-      - The ID of the link aggrecation group or connection to associate with the virtual interface.
+      - The ID of the link aggregation group or connection to associate with the virtual interface.
     aliases: [link_aggregation_group_id, connection_id]
+    type: str
+    required: true
   public:
     description:
       - The type of virtual interface.
@@ -34,35 +41,46 @@ options:
   name:
     description:
       - The name of the virtual interface.
+    type: str
   vlan:
     description:
       - The VLAN ID.
     default: 100
+    type: int
   bgp_asn:
     description:
       - The autonomous system (AS) number for Border Gateway Protocol (BGP) configuration.
     default: 65000
+    type: int
   authentication_key:
     description:
       - The authentication key for BGP configuration.
+    type: str
   amazon_address:
     description:
       - The amazon address CIDR with which to create the virtual interface.
+    type: str
   customer_address:
     description:
       - The customer address CIDR with which to create the virtual interface.
+    type: str
   address_type:
     description:
       - The type of IP address for the BGP peer.
+    type: str
   cidr:
     description:
       - A list of route filter prefix CIDRs with which to create the public virtual interface.
+    type: list
+    elements: str
   virtual_gateway_id:
     description:
       - The virtual gateway ID required for creating a private virtual interface.
+    type: str
   virtual_interface_id:
     description:
       - The virtual interface ID.
+    type: str
 extends_documentation_fragment:
   - aws
   - ec2
@@ -72,12 +90,12 @@ RETURN = '''
 address_family:
   description: The address family for the BGP peer.
   returned: always
-  type: string
+  type: str
   sample: ipv4
 amazon_address:
   description: IP address assigned to the Amazon interface.
   returned: always
-  type: string
+  type: str
   sample: 169.254.255.1/30
 asn:
   description: The autonomous system (AS) number for Border Gateway Protocol (BGP) configuration.
@@ -87,7 +105,7 @@ asn:
 auth_key:
   description: The authentication key for BGP configuration.
   returned: always
-  type: string
+  type: str
   sample: 0xZ59Y1JZ2oDOSh6YriIlyRE
 bgp_peers:
   description: A list of the BGP peers configured on this virtual interface.
@@ -97,12 +115,12 @@ bgp_peers:
     address_family:
       description: The address family for the BGP peer.
       returned: always
-      type: string
+      type: str
       sample: ipv4
     amazon_address:
       description: IP address assigned to the Amazon interface.
       returned: always
-      type: string
+      type: str
       sample: 169.254.255.1/30
     asn:
       description: The autonomous system (AS) number for Border Gateway Protocol (BGP) configuration.
@@ -112,22 +130,22 @@ bgp_peers:
     auth_key:
       description: The authentication key for BGP configuration.
       returned: always
-      type: string
+      type: str
       sample: 0xZ59Y1JZ2oDOSh6YriIlyRE
     bgp_peer_state:
       description: The state of the BGP peer (verifying, pending, available)
       returned: always
-      type: string
+      type: str
       sample: available
     bgp_status:
       description: The up/down state of the BGP peer.
       returned: always
-      type: string
+      type: str
       sample: up
     customer_address:
       description: IP address assigned to the customer interface.
       returned: always
-      type: string
+      type: str
       sample: 169.254.255.2/30
 changed:
   description: Indicated if the virtual interface has been created/modified/deleted
@@ -139,26 +157,26 @@ connection_id:
     - The ID of the connection. This field is also used as the ID type for operations that
       use multiple connection types (LAG, interconnect, and/or connection).
   returned: always
-  type: string
+  type: str
   sample: dxcon-fgb175av
 customer_address:
   description: IP address assigned to the customer interface.
   returned: always
-  type: string
+  type: str
   sample: 169.254.255.2/30
 customer_router_config:
   description: Information for generating the customer router configuration.
   returned: always
-  type: string
+  type: str
 location:
   description: Where the connection is located.
   returned: always
-  type: string
+  type: str
   sample: EqDC2
 owner_account:
   description: The AWS account that will own the new virtual interface.
   returned: always
-  type: string
+  type: str
   sample: '123456789012'
 route_filter_prefixes:
   description: A list of routes to be advertised to the AWS network in this region (public virtual interface).
@@ -168,32 +186,32 @@ route_filter_prefixes:
     cidr:
       description: A routes to be advertised to the AWS network in this region.
       returned: always
-      type: string
+      type: str
       sample: 54.227.92.216/30
 virtual_gateway_id:
   description: The ID of the virtual private gateway to a VPC. This only applies to private virtual interfaces.
   returned: when I(public=False)
-  type: string
+  type: str
   sample: vgw-f3ce259a
 virtual_interface_id:
   description: The ID of the virtual interface.
   returned: always
-  type: string
+  type: str
   sample: dxvif-fh0w7cex
 virtual_interface_name:
   description: The name of the virtual interface assigned by the customer.
   returned: always
-  type: string
+  type: str
   sample: test_virtual_interface
 virtual_interface_state:
   description: State of the virtual interface (confirming, verifying, pending, available, down, rejected).
   returned: always
-  type: string
+  type: str
   sample: available
 virtual_interface_type:
   description: The type of virtual interface (private, public).
   returned: always
-  type: string
+  type: str
   sample: private
 vlan:
   description: The VLAN ID.
@@ -222,14 +240,12 @@ EXAMPLES = '''
 import traceback
 from ansible.module_utils.aws.core import AnsibleAWSModule
 from ansible.module_utils.aws.direct_connect import DirectConnectError, delete_virtual_interface
-from ansible.module_utils.ec2 import (AWSRetry, HAS_BOTO3, boto3_conn,
-                                      ec2_argument_spec, get_aws_connection_info,
-                                      camel_dict_to_snake_dict)
+from ansible.module_utils.ec2 import AWSRetry, camel_dict_to_snake_dict
 
 try:
     from botocore.exceptions import ClientError, BotoCoreError
 except ImportError:
-    # handled by HAS_BOTO3
+    # handled by AnsibleAWSModule
     pass
 
 
@@ -443,8 +459,7 @@ def ensure_state(connection, module):
 
 
 def main():
-    argument_spec = ec2_argument_spec()
-    argument_spec.update(dict(
+    argument_spec = dict(
         state=dict(required=True, choices=['present', 'absent']),
         id_to_associate=dict(required=True, aliases=['link_aggregation_group_id', 'connection_id']),
         public=dict(type='bool'),
@@ -458,7 +473,7 @@ def main():
         cidr=dict(type='list'),
         virtual_gateway_id=dict(),
         virtual_interface_id=dict()
-    ))
+    )
 
     module = AnsibleAWSModule(argument_spec=argument_spec,
                               required_one_of=[['virtual_interface_id', 'name']],
@@ -468,8 +483,7 @@ def main():
                                            ['public', True, ['customer_address']],
                                            ['public', True, ['cidr']]])
 
-    region, ec2_url, aws_connect_kwargs = get_aws_connection_info(module, boto3=True)
-    connection = boto3_conn(module, conn_type='client', resource='directconnect', region=region, endpoint=ec2_url, **aws_connect_kwargs)
+    connection = module.client('directconnect')
 
     try:
         changed, latest_state = ensure_state(connection, module)

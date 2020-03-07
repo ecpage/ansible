@@ -24,22 +24,21 @@ import copy
 import json
 
 from ansible import constants as C
-from ansible.plugins.action.normal import ActionModule as _ActionModule
+from ansible.plugins.action.network import ActionModule as ActionNetworkModule
 from ansible.module_utils.network.asa.asa import asa_provider_spec
 from ansible.module_utils.network.common.utils import load_provider
+from ansible.utils.display import Display
+
+display = Display()
 
 
-try:
-    from __main__ import display
-except ImportError:
-    from ansible.utils.display import Display
-    display = Display()
-
-
-class ActionModule(_ActionModule):
+class ActionModule(ActionNetworkModule):
 
     def run(self, tmp=None, task_vars=None):
         del tmp  # tmp no longer has any effect
+
+        module_name = self._task.action.split('.')[-1]
+        self._config_module = True if module_name == 'asa_config' else False
 
         if self._play_context.connection == 'local':
             provider = load_provider(asa_provider_spec, self._task.args)
@@ -57,7 +56,7 @@ class ActionModule(_ActionModule):
             pc.become_method = 'enable'
 
             display.vvv('using connection plugin %s (was local)' % pc.connection, pc.remote_addr)
-            connection = self._shared_loader_obj.connection_loader.get('persistent', pc, sys.stdin)
+            connection = self._shared_loader_obj.connection_loader.get('persistent', pc, sys.stdin, task_uuid=self._task._uuid)
             connection.set_options(direct={'persistent_command_timeout': command_timeout})
 
             socket_path = connection.run()

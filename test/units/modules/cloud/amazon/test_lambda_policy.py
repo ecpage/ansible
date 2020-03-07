@@ -2,36 +2,25 @@
 # (c) 2017 Michael De La Rue
 #
 # This file is part of Ansible
-#
-# Ansible is free software: you can redistribute it and/or modify
-# it under the terms of the GNU General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# Ansible is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU General Public License for more details.
-#
-# You should have received a copy of the GNU General Public License
-# along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
+# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 # Make coding more python3-ish
 from __future__ import (absolute_import, division, print_function)
+__metaclass__ = type
 
 import copy
 
 import pytest
 
 from ansible.module_utils.aws.core import HAS_BOTO3
-from ansible.compat.tests.mock import MagicMock
+from units.compat.mock import MagicMock
 from units.modules.utils import set_module_args
 
 if not HAS_BOTO3:
     pytestmark = pytest.mark.skip("test_api_gateway.py requires the `boto3` and `botocore` modules")
 
 # these are here cause ... boto!
-import ansible.modules.cloud.amazon.lambda_policy as lambda_policy
+from ansible.modules.cloud.amazon import lambda_policy
 from ansible.modules.cloud.amazon.lambda_policy import setup_module_object
 try:
     from botocore.exceptions import ClientError

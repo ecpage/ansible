@@ -41,6 +41,7 @@ options:
         description:
             - "I(True) if the data center should be local, I(False) if should be shared."
             - "Default value is set by engine."
+        type: bool
     compatibility_version:
         description:
             - "Compatibility version of the data center."
@@ -62,6 +63,7 @@ options:
               that only empty data center can be removed."
         version_added: "2.5"
         default: False
+        type: bool
 
 extends_documentation_fragment: ovirt
 '''
@@ -201,9 +203,6 @@ def main():
         supports_check_mode=True,
     )
 
-    if module._name == 'ovirt_datacenters':
-        module.deprecate("The 'ovirt_datacenters' module is being renamed 'ovirt_datacenter'", version=2.8)
-
     check_sdk(module)
     check_params(module)
 
@@ -211,7 +210,7 @@ def main():
         auth = module.params.pop('auth')
         connection = create_connection(auth)
         data_centers_service = connection.system_service().data_centers_service()
-        clusters_module = DatacentersModule(
+        data_centers_module = DatacentersModule(
             connection=connection,
             module=module,
             service=data_centers_service,
@@ -219,9 +218,9 @@ def main():
 
         state = module.params['state']
         if state == 'present':
-            ret = clusters_module.create()
+            ret = data_centers_module.create()
         elif state == 'absent':
-            ret = clusters_module.remove(force=module.params['force'])
+            ret = data_centers_module.remove(force=module.params['force'])
 
         module.exit_json(**ret)
     except Exception as e:

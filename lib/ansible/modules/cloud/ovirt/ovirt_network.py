@@ -58,6 +58,11 @@ options:
     vlan_tag:
         description:
             - "Specify VLAN tag."
+    external_provider:
+        description:
+            - "Name of external network provider."
+            - "At first it tries to import the network when not found it will create network in external provider."
+        version_added: 2.8
     vm_network:
         description:
             - "If I(True) network will be marked as network for VM."
@@ -69,12 +74,30 @@ options:
     clusters:
         description:
             - "List of dictionaries describing how the network is managed in specific cluster."
-            - "C(name) - Cluster name."
-            - "C(assigned) - I(true) if the network should be assigned to cluster. Default is I(true)."
-            - "C(required) - I(true) if the network must remain operational for all hosts associated with this network."
-            - "C(display) - I(true) if the network should marked as display network."
-            - "C(migration) - I(true) if the network should marked as migration network."
-            - "C(gluster) - I(true) if the network should marked as gluster network."
+        suboptions:
+            name:
+                description:
+                    - Cluster name.
+            assigned:
+                description:
+                    - I(true) if the network should be assigned to cluster. Default is I(true).
+                type: bool
+            required:
+                description:
+                    - I(true) if the network must remain operational for all hosts associated with this network.
+                type: bool
+            display:
+                description:
+                    - I(true) if the network should marked as display network.
+                type: bool
+            migration:
+                description:
+                    - I(true) if the network should marked as migration network.
+                type: bool
+            gluster:
+                description:
+                    - I(true) if the network should marked as gluster network.
+                type: bool
     label:
         description:
             - "Name of the label to assign to the network."
@@ -103,6 +126,12 @@ EXAMPLES = '''
     id: 00000000-0000-0000-0000-000000000000
     name: "new_network_name"
     data_center: mydatacenter
+
+# Add network from external provider
+- ovirt_network:
+    data_center: mydatacenter
+    name: mynetwork
+    external_provider: ovirt-provider-ovn
 '''
 
 RETURN = '''
@@ -134,12 +163,17 @@ from ansible.module_utils.ovirt import (
     equal,
     ovirt_full_argument_spec,
     search_by_name,
+    get_id_by_name,
+    get_dict_of_struct,
+    get_entity
 )
 
 
 class NetworksModule(BaseModule):
-
     def build_entity(self):
+        if self.param('external_provider'):
+            ons_service = self._connection.system_service().openstack_network_providers_service()
+            on_service = ons_service.provider_service(get_id_by_name(ons_service, self.param('external_provider')))
         return otypes.Network(
             name=self._module.params['name'],
             comment=self._module.params['comment'],
@@ -155,6 +189,8 @@ class NetworksModule(BaseModule):
                 otypes.NetworkUsage.VM if self._module.params['vm_network'] else None
             ] if self._module.params['vm_network'] is not None else None,
             mtu=self._module.params['mtu'],
+            external_provider=otypes.OpenStackNetworkProvider(id=on_service.get().id)
+            if self.param('external_provider') else None,
         )
 
     def post_create(self, entity):
@@ -164,8 +200,8 @@ class NetworksModule(BaseModule):
         if self.param('label') is None:
             return
 
-        labels = [lbl.id for lbl in self._connection.follow_link(entity.network_labels)]
         labels_service = self._service.service(entity.id).network_labels_service()
+        labels = [lbl.id for lbl in labels_service.list()]
         if not self.param('label') in labels:
             if not self._module.check_mode:
                 if labels:
@@ -193,6 +229,10 @@ class ClusterNetworksModule(BaseModule):
         super(ClusterNetworksModule, self).__init__(*args, **kwargs)
         self._network_id = network_id
         self._cluster_network = cluster_network
+        self._old_usages = []
+        self._cluster_network_entity = get_entity(self._service.network_service(network_id))
+        if self._cluster_network_entity is not None:
+            self._old_usages = self._cluster_network_entity.usages
 
     def build_entity(self):
         return otypes.Network(
@@ -200,11 +240,12 @@ class ClusterNetworksModule(BaseModule):
             name=self._module.params['name'],
             required=self._cluster_network.get('required'),
             display=self._cluster_network.get('display'),
-            usages=[
+            usages=list(set([
                 otypes.NetworkUsage(usage)
                 for usage in ['display', 'gluster', 'migration']
                 if self._cluster_network.get(usage, False)
-            ] if (
+            ] + self._old_usages))
+            if (
                 self._cluster_network.get('display') is not None or
                 self._cluster_network.get('gluster') is not None or
                 self._cluster_network.get('migration') is not None
@@ -215,18 +256,18 @@ class ClusterNetworksModule(BaseModule):
         return (
             equal(self._cluster_network.get('required'), entity.required) and
             equal(self._cluster_network.get('display'), entity.display) and
-            equal(
-                sorted([
-                    usage
-                    for usage in ['display', 'gluster', 'migration']
-                    if self._cluster_network.get(usage, False)
-                ]),
-                sorted([
+            all(
+                x in [
                     str(usage)
                     for usage in getattr(entity, 'usages', [])
                     # VM + MANAGEMENT is part of root network
                     if usage != otypes.NetworkUsage.VM and usage != otypes.NetworkUsage.MANAGEMENT
-                ]),
+                ]
+                for x in [
+                    usage
+                    for usage in ['display', 'gluster', 'migration']
+                    if self._cluster_network.get(usage, False)
+                ]
             )
         )
 
@@ -242,6 +283,7 @@ def main():
         name=dict(required=True),
         description=dict(default=None),
         comment=dict(default=None),
+        external_provider=dict(default=None),
         vlan_tag=dict(default=None, type='int'),
         vm_network=dict(default=None, type='bool'),
         mtu=dict(default=None, type='int'),
@@ -252,9 +294,6 @@ def main():
         argument_spec=argument_spec,
         supports_check_mode=True,
     )
-
-    if module._name == 'ovirt_networks':
-        module.deprecate("The 'ovirt_networks' module is being renamed 'ovirt_network'", version=2.8)
 
     check_sdk(module)
     check_params(module)
@@ -275,8 +314,19 @@ def main():
             'datacenter': module.params['data_center'],
         }
         if state == 'present':
-            ret = networks_module.create(search_params=search_params)
+            imported = False
+            if module.params.get('external_provider') and module.params.get('name') not in [net.name for net in networks_service.list()]:
+                # Try to import network
+                ons_service = connection.system_service().openstack_network_providers_service()
+                on_service = ons_service.provider_service(get_id_by_name(ons_service, module.params.get('external_provider')))
+                on_networks_service = on_service.networks_service()
+                if module.params.get('name') in [net.name for net in on_networks_service.list()]:
+                    network_service = on_networks_service.network_service(get_id_by_name(on_networks_service, module.params.get('name')))
+                    network_service.import_(data_center=otypes.DataCenter(name=module.params.get('data_center')))
+                    imported = True
 
+            ret = networks_module.create(search_params=search_params)
+            ret['changed'] = ret['changed'] or imported
             # Update clusters networks:
             if module.params.get('clusters') is not None:
                 for param_cluster in module.params.get('clusters'):

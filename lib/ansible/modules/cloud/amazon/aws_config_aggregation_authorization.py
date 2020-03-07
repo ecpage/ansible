@@ -12,12 +12,12 @@ ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'supported_by': 'community'}
 
 
-DOCUMENTATION = r'''
+DOCUMENTATION = '''
 ---
 module: aws_config_aggregation_authorization
 short_description: Manage cross-account AWS Config authorizations
 description:
-    - Module manages AWS Config resources
+    - Module manages AWS Config resources.
 version_added: "2.6"
 requirements: [ 'botocore', 'boto3' ]
 author:
@@ -28,20 +28,25 @@ options:
     - Whether the Config rule should be present or absent.
     default: present
     choices: ['present', 'absent']
+    type: str
   authorized_account_id:
     description:
     - The 12-digit account ID of the account authorized to aggregate data.
+    type: str
+    required: true
   authorized_aws_region:
     description:
     - The region authorized to collect aggregated data.
+    type: str
+    required: true
 extends_documentation_fragment:
   - aws
   - ec2
 '''
 
-EXAMPLES = r'''
+EXAMPLES = '''
 - name: Get current account ID
-  aws_caller_facts:
+  aws_caller_info:
   register: whoami
 - aws_config_aggregation_authorization:
     state: present
@@ -49,7 +54,7 @@ EXAMPLES = r'''
     authorzed_aws_region: us-east-1
 '''
 
-RETURN = r'''#'''
+RETURN = '''#'''
 
 
 try:
@@ -59,8 +64,7 @@ except ImportError:
     pass  # handled by AnsibleAWSModule
 
 from ansible.module_utils.aws.core import AnsibleAWSModule
-from ansible.module_utils.ec2 import boto3_conn, get_aws_connection_info, AWSRetry
-from ansible.module_utils.ec2 import camel_dict_to_snake_dict, boto3_tag_list_to_ansible_dict
+from ansible.module_utils.ec2 import AWSRetry
 
 
 def resource_exists(client, module, params):

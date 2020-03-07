@@ -23,18 +23,23 @@ options:
     description:
       - Specifies whether the subnet should be present or absent.
     required: true
-    default: present
     choices: [ 'present' , 'absent' ]
+    type: str
   name:
     description:
       - Database subnet group identifier.
     required: true
+    type: str
   description:
     description:
-      - Database subnet group description. Only set when a new group is added.
+      - Database subnet group description.
+      - Required when I(state=present).
+    type: str
   subnets:
     description:
       - List of subnet IDs that make up the database subnet group.
+      - Required when I(state=present).
+    type: list
 author: "Scott Anderson (@tastychutney)"
 extends_documentation_fragment:
     - aws
@@ -66,23 +71,23 @@ subnet_group:
         name:
             description: The name of the DB subnet group
             returned: I(state=present)
-            type: string
+            type: str
         description:
             description: The description of the DB subnet group
             returned: I(state=present)
-            type: string
+            type: str
         vpc_id:
             description: The VpcId of the DB subnet group
             returned: I(state=present)
-            type: string
+            type: str
         subnet_ids:
             description: Contains a list of Subnet IDs
             returned: I(state=present)
-            type: array
+            type: list
         status:
             description: The status of the DB subnet group
             returned: I(state=present)
-            type: string
+            type: str
 '''
 
 try:
@@ -138,7 +143,7 @@ def main():
     group_subnets = module.params.get('subnets') or {}
 
     if state == 'present':
-        for required in ['name', 'description', 'subnets']:
+        for required in ['description', 'subnets']:
             if not module.params.get(required):
                 module.fail_json(msg=str("Parameter %s required for state='present'" % required))
     else:

@@ -9,7 +9,7 @@ __metaclass__ = type
 
 ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'status': ['preview'],
-                    'supported_by': 'community'}
+                    'supported_by': 'certified'}
 
 DOCUMENTATION = r'''
 ---
@@ -17,41 +17,54 @@ module: aci_taboo_contract
 short_description: Manage taboo contracts (vz:BrCP)
 description:
 - Manage taboo contracts on Cisco ACI fabrics.
-notes:
-- The C(tenant) used must exist before using this module in your playbook.
-  The M(aci_tenant) module can be used for this.
-- More information about the internal APIC class B(vz:BrCP) from
-  L(the APIC Management Information Model reference,https://developer.cisco.com/docs/apic-mim-ref/).
-author:
-- Dag Wieers (@dagwieers)
 version_added: '2.4'
 options:
   taboo_contract:
     description:
     - The name of the Taboo Contract.
+    type: str
     required: yes
     aliases: [ name ]
   description:
     description:
     - The description for the Taboo Contract.
+    type: str
     aliases: [ descr ]
   tenant:
     description:
     - The name of the tenant.
+    type: str
     required: yes
     aliases: [ tenant_name ]
   scope:
     description:
     - The scope of a service contract.
     - The APIC defaults to C(context) when unset during creation.
+    type: str
     choices: [ application-profile, context, global, tenant ]
   state:
     description:
     - Use C(present) or C(absent) for adding or removing.
     - Use C(query) for listing an object or multiple objects.
+    type: str
     choices: [ absent, present, query ]
     default: present
+  name_alias:
+    version_added: '2.10'
+    description:
+    - The alias for the current object. This relates to the nameAlias field in ACI.
+    type: str
 extends_documentation_fragment: aci
+notes:
+- The C(tenant) used must exist before using this module in your playbook.
+  The M(aci_tenant) module can be used for this.
+seealso:
+- module: aci_tenant
+- name: APIC Management Information Model reference
+  description: More information about the internal APIC class B(vz:BrCP).
+  link: https://developer.cisco.com/docs/apic-mim-ref/
+author:
+- Dag Wieers (@dagwieers)
 '''
 
 EXAMPLES = r'''
@@ -128,7 +141,7 @@ error:
 raw:
   description: The raw output returned by the APIC REST API (xml or json)
   returned: parse error
-  type: string
+  type: str
   sample: '<?xml version="1.0" encoding="UTF-8"?><imdata totalCount="1"><error code="122" text="unknown managed object class foo"/></imdata>'
 sent:
   description: The actual/minimal configuration pushed to the APIC
@@ -177,17 +190,17 @@ proposed:
 filter_string:
   description: The filter string used for the request
   returned: failure or debug
-  type: string
+  type: str
   sample: ?rsp-prop-include=config-only
 method:
   description: The HTTP method used for the request to the APIC
   returned: failure or debug
-  type: string
+  type: str
   sample: POST
 response:
   description: The HTTP response from the APIC
   returned: failure or debug
-  type: string
+  type: str
   sample: OK (30 bytes)
 status:
   description: The HTTP status from the APIC
@@ -197,22 +210,23 @@ status:
 url:
   description: The HTTP url used for the request to the APIC
   returned: failure or debug
-  type: string
+  type: str
   sample: https://10.11.12.13/api/mo/uni/tn-production.json
 '''
 
-from ansible.module_utils.network.aci.aci import ACIModule, aci_argument_spec
 from ansible.module_utils.basic import AnsibleModule
+from ansible.module_utils.network.aci.aci import ACIModule, aci_argument_spec
 
 
 def main():
     argument_spec = aci_argument_spec()
     argument_spec.update(
-        taboo_contract=dict(type='str', required=False, aliases=['name']),  # Not required for querying all contracts
-        tenant=dict(type='str', required=False, aliases=['tenant_name']),  # Not required for querying all contracts
+        taboo_contract=dict(type='str', aliases=['name']),  # Not required for querying all contracts
+        tenant=dict(type='str', aliases=['tenant_name']),  # Not required for querying all contracts
         scope=dict(type='str', choices=['application-profile', 'context', 'global', 'tenant']),
         description=dict(type='str', aliases=['descr']),
         state=dict(type='str', default='present', choices=['absent', 'present', 'query']),
+        name_alias=dict(type='str'),
     )
 
     module = AnsibleModule(
@@ -224,11 +238,12 @@ def main():
         ],
     )
 
-    taboo_contract = module.params['taboo_contract']
-    description = module.params['description']
-    scope = module.params['scope']
-    state = module.params['state']
-    tenant = module.params['tenant']
+    taboo_contract = module.params.get('taboo_contract')
+    description = module.params.get('description')
+    scope = module.params.get('scope')
+    state = module.params.get('state')
+    tenant = module.params.get('tenant')
+    name_alias = module.params.get('name_alias')
 
     aci = ACIModule(module)
     aci.construct_url(
@@ -255,6 +270,7 @@ def main():
                 name=taboo_contract,
                 descr=description,
                 scope=scope,
+                nameAlias=name_alias,
             ),
         )
 

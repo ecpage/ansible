@@ -1,9 +1,8 @@
 #!/usr/bin/python
 # coding: utf-8 -*-
-#
-# (c) 2018, Adrien Fleury <fleu42@gmail.com>
-# GNU General Public License v3.0+
-# (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+
+# Copyright: (c) 2018, Adrien Fleury <fleu42@gmail.com>
+# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
@@ -27,18 +26,27 @@ options:
     allow_simultaneous:
       description:
         - If enabled, simultaneous runs of this job template will be allowed.
-      required: False
       type: bool
+    ask_extra_vars:
+      description:
+        - Prompt user for (extra_vars) on launch.
+      type: bool
+      version_added: "2.9"
+    ask_inventory:
+      description:
+        - Prompt user for inventory on launch.
+      type: bool
+      version_added: "2.9"
     description:
       description:
         - The description to use for the workflow.
-      required: False
-      default: null
     extra_vars:
       description:
-        - >
-          Extra variables used by Ansible in YAML or key=value format.
-      required: False
+        - Extra variables used by Ansible in YAML or key=value format.
+    inventory:
+      description:
+        - Name of the inventory to use for the job template.
+      version_added: "2.9"
     name:
       description:
         - The name to use for the workflow.
@@ -46,28 +54,23 @@ options:
     organization:
       description:
         - The organization the workflow is linked to.
-      required: False
     schema:
       description:
         - >
           The schema is a JSON- or YAML-formatted string defining the
           hierarchy structure that connects the nodes. Refer to Tower
           documentation for more information.
-      required: False
     survey_enabled:
       description:
         - Setting that variable will prompt the user for job type on the
           workflow launch.
-      required: False
       type: bool
     survey:
       description:
         - The definition of the survey associated to the workflow.
-      required: False
     state:
       description:
         - Desired state of the resource.
-      required: False
       default: "present"
       choices: ["present", "absent"]
 extends_documentation_fragment: tower
@@ -77,11 +80,11 @@ extends_documentation_fragment: tower
 EXAMPLES = '''
 - tower_workflow_template:
     name: Workflow Template
-    description: My very first Worflow Template
+    description: My very first Workflow Template
     organization: My optional Organization
-    schema: "{{ lookup(file, my_workflow.json }}"
+    schema: "{{ lookup('file', 'my_workflow.json') }}"
 
-- tower_worflow_template:
+- tower_workflow_template:
     name: Workflow Template
     state: absent
 '''
@@ -115,6 +118,9 @@ def main():
         schema=dict(required=False),
         survey=dict(required=False),
         survey_enabled=dict(type='bool', required=False),
+        inventory=dict(required=False),
+        ask_inventory=dict(type='bool', required=False),
+        ask_extra_vars=dict(type='bool', required=False),
         state=dict(choices=['present', 'absent'], default='present'),
     )
 
@@ -164,8 +170,14 @@ def main():
         if module.params.get('survey'):
             params['survey_spec'] = module.params.get('survey')
 
-        for key in ('allow_simultaneous', 'extra_vars', 'survey_enabled',
-                    'description'):
+        if module.params.get('ask_extra_vars'):
+            params['ask_variables_on_launch'] = module.params.get('ask_extra_vars')
+
+        if module.params.get('ask_inventory'):
+            params['ask_inventory_on_launch'] = module.params.get('ask_inventory')
+
+        for key in ('allow_simultaneous', 'extra_vars', 'inventory',
+                    'survey_enabled', 'description'):
             if module.params.get(key):
                 params[key] = module.params.get(key)
 
@@ -179,7 +191,7 @@ def main():
             elif state == 'absent':
                 params['fail_on_missing'] = False
                 result = wfjt_res.delete(**params)
-        except (exc.ConnectionError, exc.BadRequest) as excinfo:
+        except (exc.ConnectionError, exc.BadRequest, exc.AuthError) as excinfo:
             module.fail_json(msg='Failed to update workflow template: \
                     {0}'.format(excinfo), changed=False)
 

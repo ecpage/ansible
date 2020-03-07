@@ -20,7 +20,7 @@
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
-from ansible.compat.tests.mock import patch
+from units.compat.mock import patch
 from ansible.modules.network.aruba import aruba_config
 from units.modules.utils import set_module_args
 from .aruba_module import TestArubaModule, load_fixture
@@ -87,7 +87,7 @@ class TestArubaConfigModule(TestArubaModule):
         self.assertEqual(self.get_config.call_count, 0)
         self.assertEqual(self.load_config.call_count, 0)
         args = self.run_commands.call_args[0][1]
-        self.assertIn('copy running-config startup-config', args)
+        self.assertIn('write memory', args)
 
     def test_aruba_config_save_changed_true(self):
         src = load_fixture('aruba_config_src.cfg')
@@ -104,7 +104,7 @@ class TestArubaConfigModule(TestArubaModule):
         self.assertEqual(self.get_config.call_count, 1)
         self.assertEqual(self.load_config.call_count, 1)
         args = self.run_commands.call_args[0][1]
-        self.assertIn('copy running-config startup-config', args)
+        self.assertIn('write memory', args)
 
     def test_aruba_config_save_changed_false(self):
         set_module_args(dict(save_when='changed'))

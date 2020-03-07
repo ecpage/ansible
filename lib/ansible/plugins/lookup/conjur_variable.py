@@ -15,7 +15,8 @@ DOCUMENTATION = """
     description:
       - "Retrieves credentials from Conjur using the controlling host's Conjur identity. Conjur info: U(https://www.conjur.org/)."
     requirements:
-      - 'The controlling host running Ansible has a Conjur identity. (More: U(https://developer.conjur.net/key_concepts/machine_identity.html))'
+      - 'The controlling host running Ansible has a Conjur identity.
+        (More: U(https://docs.conjur.org/Latest/en/Content/Get%20Started/key_concepts/machine_identity.html))'
     options:
       _term:
         description: Variable path
@@ -64,13 +65,9 @@ from ansible.module_utils.six.moves.urllib.parse import quote_plus
 import yaml
 
 from ansible.module_utils.urls import open_url
+from ansible.utils.display import Display
 
-
-try:
-    from __main__ import display
-except ImportError:
-    from ansible.utils.display import Display
-    display = Display()
+display = Display()
 
 
 # Load configuration and return as dictionary if file is present on file system

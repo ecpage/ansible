@@ -8,37 +8,15 @@ from ansible.module_utils._text import to_text
 from ansible.module_utils.parsing.convert_bool import boolean
 from ansible.parsing.yaml.objects import AnsibleUnicode
 from ansible.plugins.action import ActionBase
+from ansible.plugins.loader import become_loader
+from ansible.utils.display import Display
 
-try:
-    from __main__ import display
-except ImportError:
-    from ansible.utils.display import Display
-    display = Display()
+display = Display()
 
 
 class ActionModule(ActionBase):
 
     DEFAULT_REBOOT_TIMEOUT = 1200
-
-    def _validate_categories(self, category_names):
-        valid_categories = [
-            'Application',
-            'Connectors',
-            'CriticalUpdates',
-            'DefinitionUpdates',
-            'DeveloperKits',
-            'FeaturePacks',
-            'Guidance',
-            'SecurityUpdates',
-            'ServicePacks',
-            'Tools',
-            'UpdateRollups',
-            'Updates'
-        ]
-        for name in category_names:
-            if name not in valid_categories:
-                raise AnsibleError("Unknown category_name %s, must be one of "
-                                   "(%s)" % (name, ','.join(valid_categories)))
 
     def _run_win_updates(self, module_args, task_vars, use_task):
         display.vvv("win_updates: running win_updates module")
@@ -126,27 +104,19 @@ class ActionModule(ActionBase):
 
     def _execute_module_with_become(self, module_name, module_args, task_vars,
                                     wrap_async, use_task):
-        orig_become = self._play_context.become
-        orig_become_method = self._play_context.become_method
-        orig_become_user = self._play_context.become_user\
-
-        if not use_task:
-            if orig_become is None or orig_become is False:
-                self._play_context.become = True
-            if orig_become_method != 'runas':
-                self._play_context.become_method = 'runas'
-            if orig_become_user is None or orig_become_user == 'root':
-                self._play_context.become_user = 'SYSTEM'
-
+        orig_become = self._connection.become
         try:
+            if not use_task and orig_become is None:
+                become = become_loader.get('runas')
+                become.set_options(direct={'become_user': 'SYSTEM', 'become_pass': None})
+                self._connection.set_become_plugin(become)
+
             module_res = self._execute_module(module_name=module_name,
                                               module_args=module_args,
                                               task_vars=task_vars,
                                               wrap_async=wrap_async)
         finally:
-            self._play_context.become = orig_become
-            self._play_context.become_method = orig_become_method
-            self._play_context.become_user = orig_become_user
+            self._connection.set_become_plugin(orig_become)
 
         return module_res
 
@@ -157,14 +127,6 @@ class ActionModule(ActionBase):
         result = super(ActionModule, self).run(tmp, task_vars)
         del tmp  # tmp no longer has any effect
 
-        category_names = self._task.args.get('category_names', [
-            'CriticalUpdates',
-            'SecurityUpdates',
-            'UpdateRollups',
-        ])
-        if isinstance(category_names, AnsibleUnicode):
-            category_names = [cat.strip() for cat in category_names.split(",")]
-
         state = self._task.args.get('state', 'installed')
         reboot = self._task.args.get('reboot', False)
         reboot_timeout = self._task.args.get('reboot_timeout',
@@ -172,17 +134,9 @@ class ActionModule(ActionBase):
         use_task = boolean(self._task.args.get('use_scheduled_task', False),
                            strict=False)
 
-        # Validate the options
-        try:
-            self._validate_categories(category_names)
-        except AnsibleError as exc:
+        if state not in ['installed', 'searched', 'downloaded']:
             result['failed'] = True
-            result['msg'] = to_text(exc)
-            return result
-
-        if state not in ['installed', 'searched']:
-            result['failed'] = True
-            result['msg'] = "state must be either installed or searched"
+            result['msg'] = "state must be either installed, searched or downloaded"
             return result
 
         try:

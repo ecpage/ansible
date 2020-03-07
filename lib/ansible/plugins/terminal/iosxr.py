@@ -20,7 +20,6 @@ from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
 import re
-import json
 
 from ansible.plugins.terminal import TerminalBase
 from ansible.errors import AnsibleConnectionFailure
@@ -29,7 +28,7 @@ from ansible.errors import AnsibleConnectionFailure
 class TerminalModule(TerminalBase):
 
     terminal_stdout_re = [
-        re.compile(br"[\r\n][\w+\-\.:\/\[\]]+(?:\([^\)]+\)){,3}(?:>|#) ?$"),
+        re.compile(br"[\r\n]*[\w+\-\.:\/\[\]]+(?:\([^\)]+\)){,3}(?:>|#) ?$"),
         re.compile(br']]>]]>[\r\n]?')
     ]
 
@@ -39,7 +38,7 @@ class TerminalModule(TerminalBase):
         re.compile(br"% ?This command is not authorized"),
         re.compile(br"invalid input", re.I),
         re.compile(br"(?:incomplete|ambiguous) command", re.I),
-        re.compile(br"connection timed out", re.I),
+        re.compile(br"(?<!\()connection timed out(?!\))", re.I),
         re.compile(br"[^\r\n]+ not found", re.I),
         re.compile(br"'[^']' +returned error code: ?\d+"),
         re.compile(br"Failed to commit", re.I)

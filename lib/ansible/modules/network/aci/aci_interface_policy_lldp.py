@@ -8,7 +8,7 @@ __metaclass__ = type
 
 ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'status': ['preview'],
-                    'supported_by': 'community'}
+                    'supported_by': 'certified'}
 
 DOCUMENTATION = r'''
 ---
@@ -16,21 +16,18 @@ module: aci_interface_policy_lldp
 short_description: Manage LLDP interface policies (lldp:IfPol)
 description:
 - Manage LLDP interface policies on Cisco ACI fabrics.
-notes:
-- More information about the internal APIC class B(lldp:IfPol) from
-  L(the APIC Management Information Model reference,https://developer.cisco.com/docs/apic-mim-ref/).
-author:
-- Dag Wieers (@dagwieers)
 version_added: '2.4'
 options:
   lldp_policy:
     description:
     - The LLDP interface policy name.
+    type: str
     required: yes
     aliases: [ name ]
   description:
     description:
     - The description for the LLDP interface policy name.
+    type: str
     aliases: [ descr ]
   receive_state:
     description:
@@ -46,9 +43,21 @@ options:
     description:
     - Use C(present) or C(absent) for adding or removing.
     - Use C(query) for listing an object or multiple objects.
+    type: str
     choices: [ absent, present, query ]
     default: present
+  name_alias:
+    version_added: '2.10'
+    description:
+    - The alias for the current object. This relates to the nameAlias field in ACI.
+    type: str
 extends_documentation_fragment: aci
+seealso:
+- name: APIC Management Information Model reference
+  description: More information about the internal APIC class B(lldp:IfPol).
+  link: https://developer.cisco.com/docs/apic-mim-ref/
+author:
+- Dag Wieers (@dagwieers)
 '''
 
 # FIXME: Add more, better examples
@@ -96,7 +105,7 @@ error:
 raw:
   description: The raw output returned by the APIC REST API (xml or json)
   returned: parse error
-  type: string
+  type: str
   sample: '<?xml version="1.0" encoding="UTF-8"?><imdata totalCount="1"><error code="122" text="unknown managed object class foo"/></imdata>'
 sent:
   description: The actual/minimal configuration pushed to the APIC
@@ -145,17 +154,17 @@ proposed:
 filter_string:
   description: The filter string used for the request
   returned: failure or debug
-  type: string
+  type: str
   sample: ?rsp-prop-include=config-only
 method:
   description: The HTTP method used for the request to the APIC
   returned: failure or debug
-  type: string
+  type: str
   sample: POST
 response:
   description: The HTTP response from the APIC
   returned: failure or debug
-  type: string
+  type: str
   sample: OK (30 bytes)
 status:
   description: The HTTP status from the APIC
@@ -165,22 +174,23 @@ status:
 url:
   description: The HTTP url used for the request to the APIC
   returned: failure or debug
-  type: string
+  type: str
   sample: https://10.11.12.13/api/mo/uni/tn-production.json
 '''
 
-from ansible.module_utils.network.aci.aci import ACIModule, aci_argument_spec
 from ansible.module_utils.basic import AnsibleModule
+from ansible.module_utils.network.aci.aci import ACIModule, aci_argument_spec
 
 
 def main():
     argument_spec = aci_argument_spec()
     argument_spec.update(
-        lldp_policy=dict(type='str', require=False, aliases=['name']),  # Not required for querying all objects
+        lldp_policy=dict(type='str', aliases=['name']),  # Not required for querying all objects
         description=dict(type='str', aliases=['descr']),
-        receive_state=dict(type='raw'),  # Turn into a boolean in v2.9
-        transmit_state=dict(type='raw'),  # Turn into a boolean in v2.9
+        receive_state=dict(type='bool'),
+        transmit_state=dict(type='bool'),
         state=dict(type='str', default='present', choices=['absent', 'present', 'query']),
+        name_alias=dict(type='str'),
     )
 
     module = AnsibleModule(
@@ -194,11 +204,12 @@ def main():
 
     aci = ACIModule(module)
 
-    lldp_policy = module.params['lldp_policy']
-    description = module.params['description']
-    receive_state = aci.boolean(module.params['receive_state'], 'enabled', 'disabled')
-    transmit_state = aci.boolean(module.params['transmit_state'], 'enabled', 'disabled')
-    state = module.params['state']
+    lldp_policy = module.params.get('lldp_policy')
+    description = module.params.get('description')
+    receive_state = aci.boolean(module.params.get('receive_state'), 'enabled', 'disabled')
+    transmit_state = aci.boolean(module.params.get('transmit_state'), 'enabled', 'disabled')
+    state = module.params.get('state')
+    name_alias = module.params.get('name_alias')
 
     aci.construct_url(
         root_class=dict(
@@ -219,6 +230,7 @@ def main():
                 descr=description,
                 adminRxSt=receive_state,
                 adminTxSt=transmit_state,
+                nameAlias=name_alias,
             ),
         )
 

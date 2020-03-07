@@ -61,8 +61,9 @@ import getpass
 from datetime import datetime
 from os.path import basename
 
-from ansible.plugins.callback import CallbackBase
 from ansible.module_utils.urls import open_url
+from ansible.parsing.ajson import AnsibleJSONEncoder
+from ansible.plugins.callback import CallbackBase
 
 
 class SumologicHTTPCollectorSource(object):
@@ -88,6 +89,9 @@ class SumologicHTTPCollectorSource(object):
         else:
             ansible_role = None
 
+        if 'args' in result._task_fields:
+            del result._task_fields['args']
+
         data = {}
         data['uuid'] = result._task._uuid
         data['session'] = self.session
@@ -108,7 +112,7 @@ class SumologicHTTPCollectorSource(object):
 
         open_url(
             url,
-            data=json.dumps(data, sort_keys=True),
+            data=json.dumps(data, cls=AnsibleJSONEncoder, sort_keys=True),
             headers={
                 'Content-type': 'application/json',
                 'X-Sumo-Host': data['ansible_host']

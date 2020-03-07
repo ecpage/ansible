@@ -5,7 +5,6 @@
 from __future__ import absolute_import, division, print_function
 __metaclass__ = type
 
-
 ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'status': ['preview'],
                     'supported_by': 'community'}
@@ -216,7 +215,7 @@ EXAMPLES = '''
     ostemplate: 'local:vztmpl/ubuntu-14.04-x86_64.tar.gz'
     netif: '{"net0":"name=eth0,gw=192.168.0.1,ip=192.168.0.2/24,bridge=vmbr0"}'
 
-# Create new container with minimal options defining a mount
+# Create new container with minimal options defining a mount with 8GB
 - proxmox:
     vmid: 100
     node: uk-mc02
@@ -248,6 +247,15 @@ EXAMPLES = '''
     api_host: node1
     state: started
 
+# Start container with mount. You should enter a 90-second timeout because servers with additional disks take longer to boot.
+- proxmox:
+    vmid: 100
+    api_user: root@pam
+    api_password: 1q2w3e
+    api_host: node1
+    state: started
+    timeout: 90
+
 # Stop container
 - proxmox:
     vmid: 100
@@ -271,7 +279,7 @@ EXAMPLES = '''
     api_user: root@pam
     api_password: 1q2w3e
     api_host: node1
-    state: stopped
+    state: restarted
 
 # Remove container
 - proxmox:
@@ -285,6 +293,7 @@ EXAMPLES = '''
 import os
 import time
 import traceback
+from distutils.version import LooseVersion
 
 try:
     from proxmoxer import ProxmoxAPI
@@ -324,6 +333,11 @@ def node_check(proxmox, node):
     return [True for nd in proxmox.nodes.get() if nd['node'] == node]
 
 
+def proxmox_version(proxmox):
+    apireturn = proxmox.version.get()
+    return LooseVersion(apireturn['version'])
+
+
 def create_instance(module, proxmox, vmid, node, disk, storage, cpus, memory, swap, timeout, **kwargs):
     proxmox_node = proxmox.nodes(node)
     kwargs = dict((k, v) for k, v in kwargs.items() if v is not None)
@@ -338,7 +352,7 @@ def create_instance(module, proxmox, vmid, node, disk, storage, cpus, memory, sw
             kwargs.update(kwargs['mounts'])
             del kwargs['mounts']
         if 'pubkey' in kwargs:
-            if float(proxmox.version.get()['version']) >= 4.2:
+            if proxmox_version(proxmox) >= LooseVersion('4.2'):
                 kwargs['ssh-public-keys'] = kwargs['pubkey']
             del kwargs['pubkey']
     else:
@@ -472,7 +486,7 @@ def main():
     try:
         proxmox = ProxmoxAPI(api_host, user=api_user, password=api_password, verify_ssl=validate_certs)
         global VZ_TYPE
-        VZ_TYPE = 'openvz' if float(proxmox.version.get()['version']) < 4.0 else 'lxc'
+        VZ_TYPE = 'openvz' if proxmox_version(proxmox) < LooseVersion('4.0') else 'lxc'
 
     except Exception as e:
         module.fail_json(msg='authorization on proxmox cluster failed with exception: %s' % e)

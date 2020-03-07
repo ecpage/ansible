@@ -8,16 +8,17 @@ __metaclass__ = type
 
 ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'status': ['stableinterface'],
-                    'supported_by': 'certified'}
+                    'supported_by': 'community'}
 
 
 DOCUMENTATION = '''
 ---
 module: ec2_tag
-short_description: create and remove tags on ec2 resources.
+short_description: create and remove tags on ec2 resources
 description:
-    - Creates, removes and lists tags for any EC2 resource.  The resource is referenced by its resource id (e.g. an instance being i-XXXXXXX).
-      It is designed to be used with complex args (tags), see the examples.
+    - Creates, modifies and removes tags for any EC2 resource.
+    - Resources are referenced by their resource id (for example, an instance being i-XXXXXXX, a VPC being vpc-XXXXXXX).
+    - This module is designed to be used with complex args (tags), see the examples.
 version_added: "1.3"
 requirements: [ "boto3", "botocore" ]
 options:
@@ -25,21 +26,28 @@ options:
     description:
       - The EC2 resource id.
     required: true
+    type: str
   state:
     description:
-      - Whether the tags should be present or absent on the resource. Use list to interrogate the tags of an instance.
+      - Whether the tags should be present or absent on the resource.
+      - The use of I(state=list) to interrogate the tags of an instance has been
+        deprecated and will be removed in Anisble 2.14.  The 'list'
+        functionality has been moved to a dedicated module M(ec2_tag_info).
     default: present
     choices: ['present', 'absent', 'list']
+    type: str
   tags:
     description:
-      - a hash/dictionary of tags to add to the resource; '{"key":"value"}' and '{"key":"value","key":"value"}'
-    required: true
+      - A dictionary of tags to add or remove from the resource.
+      - If the value provided for a key is not set and I(state=absent), the tag will be removed regardless of its current value.
+      - Required when I(state=present) or I(state=absent).
+    type: dict
   purge_tags:
     description:
       - Whether unspecified tags should be removed from the resource.
-      - "Note that when combined with C(state: absent), specified tags with non-matching values are not purged."
+      - Note that when combined with I(state=absent), specified tags with non-matching values are not purged.
     type: bool
-    default: no
+    default: false
     version_added: '2.7'
 
 author:
@@ -68,14 +76,23 @@ EXAMPLES = '''
     tags:
       Name: dbserver
       Env: production
-  with_items: '{{ ec2_vol.volumes }}'
+  loop: '{{ ec2_vol.volumes }}'
 
-- name: Retrieve all tags on an instance
+- name: Remove the Env tag
   ec2_tag:
     region: eu-west-1
     resource: i-xxxxxxxxxxxxxxxxx
-    state: list
-  register: ec2_tags
+    tags:
+      Env:
+    state: absent
+
+- name: Remove the Env tag if it's currently 'development'
+  ec2_tag:
+    region: eu-west-1
+    resource: i-xxxxxxxxxxxxxxxxx
+    tags:
+      Env: development
+    state: absent
 
 - name: Remove all tags except for Name from an instance
   ec2_tag:
@@ -107,7 +124,7 @@ from ansible.module_utils.ec2 import boto3_tag_list_to_ansible_dict, ansible_dic
 
 try:
     from botocore.exceptions import BotoCoreError, ClientError
-except:
+except Exception:
     pass    # Handled by AnsibleAWSModule
 
 
@@ -142,6 +159,8 @@ def main():
     current_tags = get_tags(ec2, module, resource)
 
     if state == 'list':
+        module.deprecate(
+            'Using the "list" state has been deprecated.  Please use the ec2_tag_info module instead', version='2.14')
         module.exit_json(changed=False, tags=current_tags)
 
     add_tags, remove = compare_aws_tags(current_tags, tags, purge_tags=purge_tags)
@@ -149,8 +168,8 @@ def main():
     remove_tags = {}
     if state == 'absent':
         for key in tags:
-            if key in current_tags and current_tags[key] == tags[key]:
-                remove_tags[key] = tags[key]
+            if key in current_tags and (tags[key] is None or current_tags[key] == tags[key]):
+                remove_tags[key] = current_tags[key]
 
     for key in remove:
         remove_tags[key] = current_tags[key]

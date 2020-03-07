@@ -53,7 +53,7 @@ EXAMPLES = '''
 
 RETURN = '''
 stdout:
-    description: Returns the mysql variable supplied with it's associted value.
+    description: Returns the mysql variable supplied with it's associated value.
     returned: Returns the current variable and value, or the newly set value
               for the variable supplied..
     type: dict
@@ -73,16 +73,8 @@ ANSIBLE_METADATA = {'metadata_version': '1.1',
 
 
 from ansible.module_utils.basic import AnsibleModule
-from ansible.module_utils.mysql import mysql_connect
+from ansible.module_utils.mysql import mysql_connect, mysql_driver, mysql_driver_fail_msg
 from ansible.module_utils._text import to_native
-
-try:
-    import MySQLdb
-    import MySQLdb.cursors
-except ImportError:
-    MYSQLDB_FOUND = False
-else:
-    MYSQLDB_FOUND = True
 
 # ===========================================
 # proxysql module specific support methods.
@@ -96,10 +88,8 @@ def perform_checks(module):
             msg="login_port must be a valid unix port number (0-65535)"
         )
 
-    if not MYSQLDB_FOUND:
-        module.fail_json(
-            msg="the python mysqldb module is required"
-        )
+    if mysql_driver is None:
+        module.fail_json(msg=mysql_driver_fail_msg)
 
 
 def save_config_to_disk(variable, cursor):
@@ -129,6 +119,10 @@ def check_config(variable, value, cursor):
 
     cursor.execute(query_string, query_data)
     check_count = cursor.fetchone()
+
+    if isinstance(check_count, tuple):
+        return int(check_count[0]) > 0
+
     return (int(check_count['variable_count']) > 0)
 
 
@@ -207,12 +201,12 @@ def main():
 
     cursor = None
     try:
-        cursor = mysql_connect(module,
-                               login_user,
-                               login_password,
-                               config_file,
-                               cursor_class=MySQLdb.cursors.DictCursor)
-    except MySQLdb.Error as e:
+        cursor, db_conn = mysql_connect(module,
+                                        login_user,
+                                        login_password,
+                                        config_file,
+                                        cursor_class='DictCursor')
+    except mysql_driver.Error as e:
         module.fail_json(
             msg="unable to connect to ProxySQL Admin Module.. %s" % to_native(e)
         )
@@ -231,7 +225,7 @@ def main():
                     msg="The variable \"%s\" was not found" % variable
                 )
 
-        except MySQLdb.Error as e:
+        except mysql_driver.Error as e:
             module.fail_json(
                 msg="unable to get config.. %s" % to_native(e)
             )
@@ -264,7 +258,7 @@ def main():
                     msg="The variable \"%s\" was not found" % variable
                 )
 
-        except MySQLdb.Error as e:
+        except mysql_driver.Error as e:
             module.fail_json(
                 msg="unable to set config.. %s" % to_native(e)
             )

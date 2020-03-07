@@ -16,6 +16,9 @@
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+from __future__ import (absolute_import, division, print_function)
+__metaclass__ = type
+
 ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'status': ['preview'],
                     'supported_by': 'community'}
@@ -27,13 +30,16 @@ version_added: "2.4"
 short_description: Manages Eth-Trunk interfaces on HUAWEI CloudEngine switches.
 description:
     - Manages Eth-Trunk specific configuration parameters on HUAWEI CloudEngine switches.
-author: QijunPan (@CloudEngine-Ansible)
+author: QijunPan (@QijunPan)
 notes:
     - C(state=absent) removes the Eth-Trunk config and interface if it
       already exists. If members to be removed are not explicitly
       passed, all existing members (if any), are removed,
       and Eth-Trunk removed.
     - Members must be a list.
+    - This module requires the netconf system service be enabled on the remote device being managed.
+    - Recommended connection is C(netconf).
+    - This module also works with C(local) connections for legacy playbooks.
 options:
     trunk_id:
         description:
@@ -129,7 +135,7 @@ updates:
 changed:
     description: check to see if a change was made on the device
     returned: always
-    type: boolean
+    type: bool
     sample: true
 '''
 
@@ -399,7 +405,7 @@ class EthTrunk(object):
         return False
 
     def get_mode_xml_str(self):
-        """trunk mode netconf xml fromat string"""
+        """trunk mode netconf xml format string"""
 
         return MODE_CLI2XML.get(self.mode)
 

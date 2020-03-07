@@ -8,7 +8,7 @@ __metaclass__ = type
 
 ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'status': ['preview'],
-                    'supported_by': 'community'}
+                    'supported_by': 'certified'}
 
 DOCUMENTATION = r'''
 ---
@@ -16,21 +16,18 @@ module: aci_interface_policy_mcp
 short_description: Manage MCP interface policies (mcp:IfPol)
 description:
 - Manage MCP interface policies on Cisco ACI fabrics.
-notes:
-- More information about the internal APIC class B(mcp:IfPol) from
-  L(the APIC Management Information Model reference,https://developer.cisco.com/docs/apic-mim-ref/).
-author:
-- Dag Wieers (@dagwieers)
 version_added: '2.4'
 options:
   mcp:
     description:
     - The name of the MCP interface.
+    type: str
     required: yes
     aliases: [ mcp_interface, name ]
   description:
     description:
     - The description for the MCP interface.
+    type: str
     aliases: [ descr ]
   admin_state:
     description:
@@ -41,9 +38,21 @@ options:
     description:
     - Use C(present) or C(absent) for adding or removing.
     - Use C(query) for listing an object or multiple objects.
+    type: str
     choices: [ absent, present, query ]
     default: present
+  name_alias:
+    version_added: '2.10'
+    description:
+    - The alias for the current object. This relates to the nameAlias field in ACI.
+    type: str
 extends_documentation_fragment: aci
+seealso:
+- name: APIC Management Information Model reference
+  description: More information about the internal APIC class B(mcp:IfPol).
+  link: https://developer.cisco.com/docs/apic-mim-ref/
+author:
+- Dag Wieers (@dagwieers)
 '''
 
 # FIXME: Add more, better examples
@@ -90,7 +99,7 @@ error:
 raw:
   description: The raw output returned by the APIC REST API (xml or json)
   returned: parse error
-  type: string
+  type: str
   sample: '<?xml version="1.0" encoding="UTF-8"?><imdata totalCount="1"><error code="122" text="unknown managed object class foo"/></imdata>'
 sent:
   description: The actual/minimal configuration pushed to the APIC
@@ -139,17 +148,17 @@ proposed:
 filter_string:
   description: The filter string used for the request
   returned: failure or debug
-  type: string
+  type: str
   sample: ?rsp-prop-include=config-only
 method:
   description: The HTTP method used for the request to the APIC
   returned: failure or debug
-  type: string
+  type: str
   sample: POST
 response:
   description: The HTTP response from the APIC
   returned: failure or debug
-  type: string
+  type: str
   sample: OK (30 bytes)
 status:
   description: The HTTP status from the APIC
@@ -159,21 +168,22 @@ status:
 url:
   description: The HTTP url used for the request to the APIC
   returned: failure or debug
-  type: string
+  type: str
   sample: https://10.11.12.13/api/mo/uni/tn-production.json
 '''
 
-from ansible.module_utils.network.aci.aci import ACIModule, aci_argument_spec
 from ansible.module_utils.basic import AnsibleModule
+from ansible.module_utils.network.aci.aci import ACIModule, aci_argument_spec
 
 
 def main():
     argument_spec = aci_argument_spec()
     argument_spec.update(
-        mcp=dict(type='str', required=False, aliases=['mcp_interface', 'name']),  # Not required for querying all objects
+        mcp=dict(type='str', aliases=['mcp_interface', 'name']),  # Not required for querying all objects
         description=dict(type='str', aliases=['descr']),
-        admin_state=dict(type='raw'),  # Turn into a boolean in v2.9
+        admin_state=dict(type='bool'),
         state=dict(type='str', default='present', choices=['absent', 'present', 'query']),
+        name_alias=dict(type='str'),
     )
 
     module = AnsibleModule(
@@ -187,10 +197,11 @@ def main():
 
     aci = ACIModule(module)
 
-    mcp = module.params['mcp']
-    description = module.params['description']
-    admin_state = aci.boolean(module.params['admin_state'], 'enabled', 'disabled')
-    state = module.params['state']
+    mcp = module.params.get('mcp')
+    description = module.params.get('description')
+    admin_state = aci.boolean(module.params.get('admin_state'), 'enabled', 'disabled')
+    state = module.params.get('state')
+    name_alias = module.params.get('name_alias')
 
     aci.construct_url(
         root_class=dict(
@@ -210,6 +221,7 @@ def main():
                 name=mcp,
                 descr=description,
                 adminSt=admin_state,
+                nameAlias=name_alias,
             ),
         )
 

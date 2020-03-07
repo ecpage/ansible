@@ -130,9 +130,6 @@ def main():
                            required_if=[('action', 'rebuild', ['image'])],
                            **module_kwargs)
 
-    if module._name == 'os_server_actions':
-        module.deprecate("The 'os_server_actions' module is being renamed 'os_server_action'", version=2.8)
-
     action = module.params['action']
     wait = module.params['wait']
     timeout = module.params['timeout']
@@ -157,7 +154,7 @@ def main():
                 json={'os-stop': None})
             if wait:
                 _wait(timeout, cloud, server, action, module, sdk)
-                module.exit_json(changed=True)
+            module.exit_json(changed=True)
 
         if action == 'start':
             if not _system_state_change(action, status):
@@ -168,7 +165,7 @@ def main():
                 json={'os-start': None})
             if wait:
                 _wait(timeout, cloud, server, action, module, sdk)
-                module.exit_json(changed=True)
+            module.exit_json(changed=True)
 
         if action == 'pause':
             if not _system_state_change(action, status):
@@ -179,7 +176,7 @@ def main():
                 json={'pause': None})
             if wait:
                 _wait(timeout, cloud, server, action, module, sdk)
-                module.exit_json(changed=True)
+            module.exit_json(changed=True)
 
         elif action == 'unpause':
             if not _system_state_change(action, status):

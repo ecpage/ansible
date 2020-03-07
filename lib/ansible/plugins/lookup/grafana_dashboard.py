@@ -25,7 +25,7 @@ options:
       - api key of grafana.
       - when C(grafana_api_key) is set, the options C(grafan_user), C(grafana_password) and C(grafana_org_id) are ignored.
       - Attention, please remove the two == at the end of the grafana_api_key
-      - because ansible lookup plugins options are splited on = (see example).
+      - because ansible lookup plugins options are split on = (see example).
     env:
       - name: GRAFANA_API_KEY
   grafana_user:
@@ -64,15 +64,12 @@ import json
 import os
 from ansible.errors import AnsibleError, AnsibleParserError
 from ansible.plugins.lookup import LookupBase
-from ansible.module_utils.urls import open_url
-from ansible.module_utils._text import to_bytes
+from ansible.module_utils.urls import basic_auth_header, open_url
+from ansible.module_utils._text import to_bytes, to_native
 from ansible.module_utils.six.moves.urllib.error import HTTPError
+from ansible.utils.display import Display
 
-try:
-    from __main__ import display
-except ImportError:
-    from ansible.utils.display import Display
-    display = Display()
+display = Display()
 
 
 ANSIBLE_GRAFANA_URL = 'http://127.0.0.1:3000'
@@ -118,7 +115,7 @@ class GrafanaAPI:
         try:
             r = open_url('%s/api/user/using/%s' % (self.grafana_url, self.grafana_org_id), headers=headers, method='POST')
         except HTTPError as e:
-            raise GrafanaAPIException('Unable to switch to organization %s : %s' % (self.grafana_org_id, str(e)))
+            raise GrafanaAPIException('Unable to switch to organization %s : %s' % (self.grafana_org_id, to_native(e)))
         if r.getcode() != 200:
             raise GrafanaAPIException('Unable to switch to organization %s : %s' % (self.grafana_org_id, str(r.getcode())))
 
@@ -127,8 +124,7 @@ class GrafanaAPI:
         if self.grafana_api_key:
             headers['Authorization'] = "Bearer %s==" % self.grafana_api_key
         else:
-            auth = base64.b64encode(to_bytes('%s:%s' % (self.grafana_user, self.grafana_password)).replace('\n', ''))
-            headers['Authorization'] = 'Basic %s' % auth
+            headers['Authorization'] = basic_auth_header(self.grafana_user, self.grafana_password)
             self.grafana_switch_organisation(headers)
 
         return headers
@@ -144,12 +140,12 @@ class GrafanaAPI:
             else:
                 r = open_url('%s/api/search/' % self.grafana_url, headers=headers, method='GET')
         except HTTPError as e:
-            raise GrafanaAPIException('Unable to search dashboards : %s' % str(e))
+            raise GrafanaAPIException('Unable to search dashboards : %s' % to_native(e))
         if r.getcode() == 200:
             try:
                 dashboard_list = json.loads(r.read())
             except Exception as e:
-                raise GrafanaAPIException('Unable to parse json list %s' % str(e))
+                raise GrafanaAPIException('Unable to parse json list %s' % to_native(e))
         else:
             raise GrafanaAPIException('Unable to list grafana dashboards : %s' % str(r.getcode()))
 

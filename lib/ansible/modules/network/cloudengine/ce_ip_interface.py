@@ -16,6 +16,9 @@
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 #
 
+from __future__ import (absolute_import, division, print_function)
+__metaclass__ = type
+
 ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'status': ['preview'],
                     'supported_by': 'community'}
@@ -27,13 +30,16 @@ version_added: "2.4"
 short_description: Manages L3 attributes for IPv4 and IPv6 interfaces on HUAWEI CloudEngine switches.
 description:
     - Manages Layer 3 attributes for IPv4 and IPv6 interfaces on HUAWEI CloudEngine switches.
-author: QijunPan (@CloudEngine-Ansible)
+author: QijunPan (@QijunPan)
 notes:
     - Interface must already be a L3 port when using this module.
     - Logical interfaces (loopback, vlanif) must be created first.
     - C(mask) must be inserted in decimal format (i.e. 24) for
       both IPv6 and IPv4.
     - A single interface can have multiple IPv6 configured.
+    - This module requires the netconf system service be enabled on the remote device being managed.
+    - Recommended connection is C(netconf).
+    - This module also works with C(local) connections for legacy playbooks.
 options:
     interface:
         description:
@@ -141,7 +147,7 @@ updates:
 changed:
     description: check to see if a change was made on the device
     returned: always
-    type: boolean
+    type: bool
     sample: true
 '''
 
@@ -300,48 +306,44 @@ def get_interface_type(interface):
     if interface is None:
         return None
 
-    iftype = None
-
     if interface.upper().startswith('GE'):
-        iftype = 'ge'
+        return 'ge'
     elif interface.upper().startswith('10GE'):
-        iftype = '10ge'
+        return '10ge'
     elif interface.upper().startswith('25GE'):
-        iftype = '25ge'
+        return '25ge'
     elif interface.upper().startswith('4X10GE'):
-        iftype = '4x10ge'
+        return '4x10ge'
     elif interface.upper().startswith('40GE'):
-        iftype = '40ge'
+        return '40ge'
     elif interface.upper().startswith('100GE'):
-        iftype = '100ge'
+        return '100ge'
     elif interface.upper().startswith('VLANIF'):
-        iftype = 'vlanif'
+        return 'vlanif'
     elif interface.upper().startswith('LOOPBACK'):
-        iftype = 'loopback'
+        return 'loopback'
     elif interface.upper().startswith('METH'):
-        iftype = 'meth'
+        return 'meth'
     elif interface.upper().startswith('ETH-TRUNK'):
-        iftype = 'eth-trunk'
+        return 'eth-trunk'
     elif interface.upper().startswith('VBDIF'):
-        iftype = 'vbdif'
+        return 'vbdif'
     elif interface.upper().startswith('NVE'):
-        iftype = 'nve'
+        return 'nve'
     elif interface.upper().startswith('TUNNEL'):
-        iftype = 'tunnel'
+        return 'tunnel'
     elif interface.upper().startswith('ETHERNET'):
-        iftype = 'ethernet'
+        return 'ethernet'
     elif interface.upper().startswith('FCOE-PORT'):
-        iftype = 'fcoe-port'
+        return 'fcoe-port'
     elif interface.upper().startswith('FABRIC-PORT'):
-        iftype = 'fabric-port'
+        return 'fabric-port'
     elif interface.upper().startswith('STACK-PORT'):
-        iftype = 'stack-port'
+        return 'stack-port'
     elif interface.upper().startswith('NULL'):
-        iftype = 'null'
+        return 'null'
     else:
         return None
-
-    return iftype.lower()
 
 
 def is_valid_v4addr(addr):

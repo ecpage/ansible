@@ -25,14 +25,11 @@ from ansible.module_utils._text import to_bytes
 from ansible.module_utils.six import string_types
 from ansible.module_utils.parsing.convert_bool import boolean
 from ansible.plugins.action import ActionBase
+from ansible.utils.display import Display
 from ansible.utils.hashing import checksum, checksum_s, md5, secure_hash
 from ansible.utils.path import makedirs_safe
 
-try:
-    from __main__ import display
-except ImportError:
-    from ansible.utils.display import Display
-    display = Display()
+display = Display()
 
 
 class ActionModule(ActionBase):
@@ -75,7 +72,7 @@ class ActionModule(ActionBase):
             source = self._remote_expand_user(source)
 
             remote_checksum = None
-            if not self._play_context.become:
+            if not self._connection.become:
                 # calculate checksum for the remote file, don't bother if using become as slurp will be used
                 # Force remote_checksum to follow symlinks because fetch always follows symlinks
                 remote_checksum = self._remote_checksum(source, all_vars=task_vars, follow=True)

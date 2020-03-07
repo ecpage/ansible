@@ -18,37 +18,36 @@ DOCUMENTATION = """
 module: ec2_lc_find
 short_description: Find AWS Autoscaling Launch Configurations
 description:
-  - Returns list of matching Launch Configurations for a given name, along with other useful information
-  - Results can be sorted and sliced
-  - It depends on boto
-  - Based on the work by Tom Bamford (https://github.com/tombamford)
+  - Returns list of matching Launch Configurations for a given name, along with other useful information.
+  - Results can be sorted and sliced.
+  - It depends on boto.
+  - Based on the work by Tom Bamford U(https://github.com/tombamford)
 
 version_added: "2.2"
 author: "Jose Armesto (@fiunchinho)"
 options:
-  region:
-    description:
-      - The AWS region to use.
-    required: true
-    aliases: ['aws_region', 'ec2_region']
   name_regex:
     description:
-      - A Launch Configuration to match
-      - It'll be compiled as regex
+      - A Launch Configuration to match.
+      - It'll be compiled as regex.
     required: True
+    type: str
   sort_order:
     description:
       - Order in which to sort results.
     choices: ['ascending', 'descending']
     default: 'ascending'
+    type: str
   limit:
     description:
       - How many results to show.
       - Corresponds to Python slice notation like list[:limit].
+    type: int
 requirements:
   - "python >= 2.6"
   - boto3
 extends_documentation_fragment:
+    - ec2
     - aws
 """
 
@@ -66,42 +65,42 @@ RETURN = '''
 image_id:
     description: AMI id
     returned: when Launch Configuration was found
-    type: string
+    type: str
     sample: "ami-0d75df7e"
 user_data:
     description: User data used to start instance
     returned: when Launch Configuration was found
-    type: string
+    type: str
     sample: "ZXhwb3J0IENMT1VE"
 name:
     description: Name of the Launch Configuration
     returned: when Launch Configuration was found
-    type: string
+    type: str
     sample: "myapp-v123"
 arn:
     description: Name of the AMI
     returned: when Launch Configuration was found
-    type: string
+    type: str
     sample: "arn:aws:autoscaling:eu-west-1:12345:launchConfiguration:d82f050e-e315:launchConfigurationName/yourproject"
 instance_type:
     description: Type of ec2 instance
     returned: when Launch Configuration was found
-    type: string
+    type: str
     sample: "t2.small"
 created_time:
     description: When it was created
     returned: when Launch Configuration was found
-    type: string
+    type: str
     sample: "2016-06-29T14:59:22.222000+00:00"
 ebs_optimized:
     description: Launch Configuration EBS optimized property
     returned: when Launch Configuration was found
-    type: boolean
+    type: bool
     sample: False
 instance_monitoring:
     description: Launch Configuration instance monitoring property
     returned: when Launch Configuration was found
-    type: string
+    type: str
     sample: {"Enabled": false}
 classic_link_vpc_security_groups:
     description: Launch Configuration classic link vpc security groups property
@@ -116,7 +115,7 @@ block_device_mappings:
 keyname:
     description: Launch Configuration ssh key
     returned: when Launch Configuration was found
-    type: string
+    type: str
     sample: mykey
 security_groups:
     description: Launch Configuration security groups
@@ -126,17 +125,17 @@ security_groups:
 kernel_id:
     description: Launch Configuration kernel to use
     returned: when Launch Configuration was found
-    type: string
+    type: str
     sample: ''
 ram_disk_id:
     description: Launch Configuration ram disk property
     returned: when Launch Configuration was found
-    type: string
+    type: str
     sample: ''
 associate_public_address:
     description: Assign public address or not
     returned: when Launch Configuration was found
-    type: boolean
+    type: bool
     sample: True
 ...
 '''
@@ -198,7 +197,6 @@ def find_launch_configs(client, module):
 def main():
     argument_spec = ec2_argument_spec()
     argument_spec.update(dict(
-        region=dict(required=True, aliases=['aws_region', 'ec2_region']),
         name_regex=dict(required=True),
         sort_order=dict(required=False, default='ascending', choices=['ascending', 'descending']),
         limit=dict(required=False, type='int'),

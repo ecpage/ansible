@@ -17,12 +17,11 @@
 # along with Ansible.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from ansible.compat.tests.mock import patch, Mock, call
+from units.compat.mock import patch, Mock, call
 from .netscaler_module import TestModule
 import copy
 import tempfile
 import json
-import sys
 import codecs
 
 from ansible.modules.network.netscaler import netscaler_nitro_request
@@ -57,14 +56,8 @@ class TestNetscalerNitroRequestModule(TestModule):
 
         cls.MockException = MockException
 
-    @classmethod
-    def tearDownClass(cls):
-        pass
-
+    # This has code in a parent class
     def setUp(self):
-        pass
-
-    def tearDown(self):
         pass
 
     def test_fail_on_conflicting_authentication_methods(self):

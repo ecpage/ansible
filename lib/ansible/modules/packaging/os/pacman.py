@@ -23,12 +23,15 @@ version_added: "1.0"
 author:
     - Indrajit Raychaudhuri (@indrajitr)
     - Aaron Bull Schaefer (@elasticdog) <aaron@elasticdog.com>
-    - Afterburn
+    - Maxime de Roucy (@tchernomax)
 options:
     name:
         description:
-            - Name or list of names of the packages to install, upgrade, or remove.
+            - Name or list of names of the package(s) or file(s) to install, upgrade, or remove.
+              Can't be used in combination with C(upgrade).
         aliases: [ package, pkg ]
+        type: list
+        elements: str
 
     state:
         description:
@@ -36,38 +39,50 @@ options:
         default: present
         choices: [ absent, latest, present ]
 
-    recurse:
-        description:
-            - When removing a package, also remove its dependencies, provided
-              that they are not required by other packages and were not
-              explicitly installed by a user.
-        type: bool
-        default: no
-        version_added: "1.3"
-
     force:
         description:
-            - When removing package - force remove package, without any
-              checks. When update_cache - force redownload repo
-              databases.
-        type: bool
+            - When removing package, force remove package, without any checks.
+              Same as `extra_args="--nodeps --nodeps"`.
+              When update_cache, force redownload repo databases.
+              Same as `update_cache_extra_args="--refresh --refresh"`.
         default: no
+        type: bool
         version_added: "2.0"
+
+    extra_args:
+        description:
+            - Additional option to pass to pacman when enforcing C(state).
+        default:
+        version_added: "2.8"
 
     update_cache:
         description:
-            - Whether or not to refresh the master package lists. This can be
-              run as part of a package installation or as a separate step.
-        type: bool
+            - Whether or not to refresh the master package lists.
+            - This can be run as part of a package installation or as a separate step.
         default: no
+        type: bool
         aliases: [ update-cache ]
+
+    update_cache_extra_args:
+        description:
+            - Additional option to pass to pacman when enforcing C(update_cache).
+        default:
+        version_added: "2.8"
 
     upgrade:
         description:
-            - Whether or not to upgrade whole system.
-        type: bool
+            - Whether or not to upgrade the whole system.
+              Can't be used in combination with C(name).
         default: no
+        type: bool
         version_added: "2.0"
+
+    upgrade_extra_args:
+        description:
+            - Additional option to pass to pacman when enforcing C(upgrade).
+        default:
+        version_added: "2.8"
+
 notes:
   - When used with a `loop:` each package will be processed individually,
     it is much more efficient to pass the list directly to the `name` option.
@@ -82,9 +97,21 @@ packages:
 '''
 
 EXAMPLES = '''
-- name: Install package foo
+- name: Install package foo from repo
   pacman:
     name: foo
+    state: present
+
+- name: Install package bar from file
+  pacman:
+    name: ~/bar-1.0-1-any.pkg.tar.xz
+    state: present
+
+- name: Install package foo from repo and bar from file
+  pacman:
+    name:
+      - foo
+      - ~/bar-1.0-1-any.pkg.tar.xz
     state: present
 
 - name: Upgrade package foo
@@ -95,14 +122,16 @@ EXAMPLES = '''
 
 - name: Remove packages foo and bar
   pacman:
-    name: foo,bar
+    name:
+      - foo
+      - bar
     state: absent
 
 - name: Recursively remove package baz
   pacman:
     name: baz
     state: absent
-    recurse: yes
+    extra_args: --recursive
 
 - name: Run the equivalent of "pacman -Sy" as a separate step
   pacman:
@@ -133,9 +162,18 @@ def get_version(pacman_output):
     """Take pacman -Qi or pacman -Si output and get the Version"""
     lines = pacman_output.split('\n')
     for line in lines:
-        if 'Version' in line:
+        if line.startswith('Version '):
             return line.split(':')[1].strip()
     return None
+
+
+def get_name(module, pacman_output):
+    """Take pacman -Qi or pacman -Si output and get the package name"""
+    lines = pacman_output.split('\n')
+    for line in lines:
+        if line.startswith('Name '):
+            return line.split(':')[1].strip()
+    module.fail_json(msg="get_name: fail to retrieve package name from pacman output")
 
 
 def query_package(module, pacman_path, name, state="present"):
@@ -143,16 +181,22 @@ def query_package(module, pacman_path, name, state="present"):
     boolean to indicate if the package is up-to-date and a third boolean to indicate whether online information were available
     """
     if state == "present":
-        lcmd = "%s -Qi %s" % (pacman_path, name)
+        lcmd = "%s --query --info %s" % (pacman_path, name)
         lrc, lstdout, lstderr = module.run_command(lcmd, check_rc=False)
         if lrc != 0:
             # package is not installed locally
             return False, False, False
+        else:
+            # a non-zero exit code doesn't always mean the package is installed
+            # for example, if the package name queried is "provided" by another package
+            installed_name = get_name(module, lstdout)
+            if installed_name != name:
+                return False, False, False
 
         # get the version installed locally (if any)
         lversion = get_version(lstdout)
 
-        rcmd = "%s -Si %s" % (pacman_path, name)
+        rcmd = "%s --sync --info %s" % (pacman_path, name)
         rrc, rstdout, rstderr = module.run_command(rcmd, check_rc=False)
         # get the version in the repository
         rversion = get_version(rstdout)
@@ -167,12 +211,10 @@ def query_package(module, pacman_path, name, state="present"):
 
 
 def update_package_db(module, pacman_path):
-    if module.params["force"]:
-        args = "Syy"
-    else:
-        args = "Sy"
+    if module.params['force']:
+        module.params["update_cache_extra_args"] += " --refresh --refresh"
 
-    cmd = "%s -%s" % (pacman_path, args)
+    cmd = "%s --sync --refresh %s" % (pacman_path, module.params["update_cache_extra_args"])
     rc, stdout, stderr = module.run_command(cmd, check_rc=False)
 
     if rc == 0:
@@ -182,8 +224,8 @@ def update_package_db(module, pacman_path):
 
 
 def upgrade(module, pacman_path):
-    cmdupgrade = "%s -Suq --noconfirm" % (pacman_path)
-    cmdneedrefresh = "%s -Qu" % (pacman_path)
+    cmdupgrade = "%s --sync --sysupgrade --quiet --noconfirm %s" % (pacman_path, module.params["upgrade_extra_args"])
+    cmdneedrefresh = "%s --query --upgrades" % (pacman_path)
     rc, stdout, stderr = module.run_command(cmdneedrefresh, check_rc=False)
     data = stdout.split('\n')
     data.remove('')
@@ -194,7 +236,10 @@ def upgrade(module, pacman_path):
     }
 
     if rc == 0:
-        regex = re.compile(r'([\w-]+) ((?:\S+)-(?:\S+)) -> ((?:\S+)-(?:\S+))')
+        # Match lines of `pacman -Qu` output of the form:
+        #   (package name) (before version-release) -> (after version-release)
+        # e.g., "ansible 2.7.1-1 -> 2.7.2-1"
+        regex = re.compile(r'([\w+\-.@]+) (\S+-\S+) -> (\S+-\S+)')
         for p in data:
             m = regex.search(p)
             packages.append(m.group(1))
@@ -219,15 +264,8 @@ def remove_packages(module, pacman_path, packages):
         'after': '',
     }
 
-    if module.params["recurse"] or module.params["force"]:
-        if module.params["recurse"]:
-            args = "Rs"
-        if module.params["force"]:
-            args = "Rdd"
-        if module.params["recurse"] and module.params["force"]:
-            args = "Rdds"
-    else:
-        args = "R"
+    if module.params["force"]:
+        module.params["extra_args"] += " --nodeps --nodeps"
 
     remove_c = 0
     # Using a for loop in case of error, we can report the package that failed
@@ -237,7 +275,7 @@ def remove_packages(module, pacman_path, packages):
         if not installed:
             continue
 
-        cmd = "%s -%s %s --noconfirm --noprogressbar" % (pacman_path, args, package)
+        cmd = "%s --remove --noconfirm --noprogressbar %s %s" % (pacman_path, module.params["extra_args"], package)
         rc, stdout, stderr = module.run_command(cmd, check_rc=False)
 
         if rc != 0:
@@ -285,36 +323,42 @@ def install_packages(module, pacman_path, state, packages, package_files):
             to_install_repos.append(package)
 
     if to_install_repos:
-        cmd = "%s -S %s --noconfirm --noprogressbar --needed" % (pacman_path, " ".join(to_install_repos))
+        cmd = "%s --sync --noconfirm --noprogressbar --needed %s %s" % (pacman_path, module.params["extra_args"], " ".join(to_install_repos))
         rc, stdout, stderr = module.run_command(cmd, check_rc=False)
 
         if rc != 0:
             module.fail_json(msg="failed to install %s: %s" % (" ".join(to_install_repos), stderr))
 
-        data = stdout.split('\n')[3].split(' ')[2:]
-        data = [i for i in data if i != '']
-        for i, pkg in enumerate(data):
-            data[i] = re.sub('-[0-9].*$', '', data[i].split('/')[-1])
-            if module._diff:
-                diff['after'] += "%s\n" % pkg
+        # As we pass `--needed` to pacman returns a single line of ` there is nothing to do` if no change is performed.
+        # The check for > 3 is here because we pick the 4th line in normal operation.
+        if len(stdout.split('\n')) > 3:
+            data = stdout.split('\n')[3].split(' ')[2:]
+            data = [i for i in data if i != '']
+            for i, pkg in enumerate(data):
+                data[i] = re.sub('-[0-9].*$', '', data[i].split('/')[-1])
+                if module._diff:
+                    diff['after'] += "%s\n" % pkg
 
-        install_c += len(to_install_repos)
+            install_c += len(to_install_repos)
 
     if to_install_files:
-        cmd = "%s -U %s --noconfirm --noprogressbar --needed" % (pacman_path, " ".join(to_install_files))
+        cmd = "%s --upgrade --noconfirm --noprogressbar --needed %s %s" % (pacman_path, module.params["extra_args"], " ".join(to_install_files))
         rc, stdout, stderr = module.run_command(cmd, check_rc=False)
 
         if rc != 0:
             module.fail_json(msg="failed to install %s: %s" % (" ".join(to_install_files), stderr))
 
-        data = stdout.split('\n')[3].split(' ')[2:]
-        data = [i for i in data if i != '']
-        for i, pkg in enumerate(data):
-            data[i] = re.sub('-[0-9].*$', '', data[i].split('/')[-1])
-            if module._diff:
-                diff['after'] += "%s\n" % pkg
+        # As we pass `--needed` to pacman returns a single line of ` there is nothing to do` if no change is performed.
+        # The check for > 3 is here because we pick the 4th line in normal operation.
+        if len(stdout.split('\n')) > 3:
+            data = stdout.split('\n')[3].split(' ')[2:]
+            data = [i for i in data if i != '']
+            for i, pkg in enumerate(data):
+                data[i] = re.sub('-[0-9].*$', '', data[i].split('/')[-1])
+                if module._diff:
+                    diff['after'] += "%s\n" % pkg
 
-        install_c += len(to_install_files)
+            install_c += len(to_install_files)
 
     if state == 'latest' and len(package_err) > 0:
         message = "But could not ensure 'latest' state for %s package(s) as remote version could not be fetched." % (package_err)
@@ -362,7 +406,7 @@ def expand_package_groups(module, pacman_path, pkgs):
 
     for pkg in pkgs:
         if pkg:  # avoid empty strings
-            cmd = "%s -Sgq %s" % (pacman_path, pkg)
+            cmd = "%s --sync --groups --quiet %s" % (pacman_path, pkg)
             rc, stdout, stderr = module.run_command(cmd, check_rc=False)
 
             if rc == 0:
@@ -380,18 +424,22 @@ def expand_package_groups(module, pacman_path, pkgs):
 def main():
     module = AnsibleModule(
         argument_spec=dict(
-            name=dict(type='list', aliases=['package', 'pkg']),
-            state=dict(type='str', default='present', choices=['absent', 'installed', 'latest', 'present', 'removed']),
-            recurse=dict(type='bool', default=False),
+            name=dict(type='list', elements='str', aliases=['pkg', 'package']),
+            state=dict(type='str', default='present', choices=['present', 'installed', 'latest', 'absent', 'removed']),
             force=dict(type='bool', default=False),
+            extra_args=dict(type='str', default=''),
             upgrade=dict(type='bool', default=False),
+            upgrade_extra_args=dict(type='str', default=''),
             update_cache=dict(type='bool', default=False, aliases=['update-cache']),
+            update_cache_extra_args=dict(type='str', default=''),
         ),
         required_one_of=[['name', 'update_cache', 'upgrade']],
+        mutually_exclusive=[['name', 'upgrade']],
         supports_check_mode=True,
     )
 
     pacman_path = module.get_bin_path('pacman', True)
+    module.run_command_environ_update = dict(LC_ALL='C')
 
     p = module.params
 
@@ -434,6 +482,8 @@ def main():
             install_packages(module, pacman_path, p['state'], pkgs, pkg_files)
         elif p['state'] == 'absent':
             remove_packages(module, pacman_path, pkgs)
+    else:
+        module.exit_json(changed=False, msg="No package specified to work on.")
 
 
 if __name__ == "__main__":

@@ -21,7 +21,7 @@ import json
 from contextlib import contextmanager
 from copy import deepcopy
 
-from ansible.module_utils.basic import env_fallback, return_values
+from ansible.module_utils.basic import env_fallback
 from ansible.module_utils.connection import Connection, ConnectionError
 from ansible.module_utils.network.common.netconf import NetconfConnection
 from ansible.module_utils._text import to_text
@@ -32,6 +32,13 @@ try:
 except ImportError:
     from xml.etree.ElementTree import Element, SubElement, tostring as xml_to_string
     HAS_LXML = False
+
+try:
+    from jnpr.junos import Device
+    from jnpr.junos.exception import ConnectError
+    HAS_PYEZ = True
+except ImportError:
+    HAS_PYEZ = False
 
 ACTIONS = frozenset(['merge', 'override', 'replace', 'update', 'set'])
 JSON_ACTIONS = frozenset(['merge', 'override', 'update'])
@@ -48,18 +55,8 @@ junos_provider_spec = {
     'transport': dict(default='netconf', choices=['cli', 'netconf'])
 }
 junos_argument_spec = {
-    'provider': dict(type='dict', options=junos_provider_spec),
+    'provider': dict(type='dict', options=junos_provider_spec, removed_in_version=2.14),
 }
-junos_top_spec = {
-    'host': dict(removed_in_version=2.9),
-    'port': dict(removed_in_version=2.9, type='int'),
-    'username': dict(removed_in_version=2.9),
-    'password': dict(removed_in_version=2.9, no_log=True),
-    'ssh_keyfile': dict(removed_in_version=2.9, type='path'),
-    'timeout': dict(removed_in_version=2.9, type='int'),
-    'transport': dict(removed_in_version=2.9)
-}
-junos_argument_spec.update(junos_top_spec)
 
 
 def tostring(element, encoding='UTF-8'):
@@ -101,6 +98,39 @@ def get_capabilities(module):
     return module._junos_capabilities
 
 
+def get_device(module):
+    provider = module.params.get("provider") or {}
+    host = provider.get('host')
+
+    kwargs = {
+        'port': provider.get('port') or 830,
+        'user': provider.get('username')
+    }
+
+    if 'password' in provider:
+        kwargs['passwd'] = provider.get('password')
+
+    if 'ssh_keyfile' in provider:
+        kwargs['ssh_private_key_file'] = provider.get('ssh_keyfile')
+
+    if module.params.get('ssh_config'):
+        kwargs['ssh_config'] = module.params['ssh_config']
+
+    if module.params.get('ssh_private_key_file'):
+        kwargs['ssh_private_key_file'] = module.params['ssh_private_key_file']
+
+    kwargs['gather_facts'] = False
+
+    try:
+        device = Device(host, **kwargs)
+        device.open()
+        device.timeout = provider.get('timeout') or 10
+    except ConnectError as exc:
+        module.fail_json('unable to connect to %s: %s' % (host, to_text(exc)))
+
+    return device
+
+
 def is_netconf(module):
     capabilities = get_capabilities(module)
     return True if capabilities.get('network_api') == 'netconf' else False
@@ -129,7 +159,7 @@ def load_configuration(module, candidate=None, action='merge', rollback=None, fo
         module.fail_json(msg='invalid action for format json')
     elif format in ('text', 'xml') and action not in ACTIONS:
         module.fail_json(msg='invalid action format %s' % format)
-    if action == 'set' and not format == 'text':
+    if action == 'set' and format != 'text':
         module.fail_json(msg='format must be text when action is set')
 
     conn = get_connection(module)
@@ -252,16 +282,6 @@ def load_config(module, candidate, warnings, action='merge', format='xml'):
     return get_diff(module)
 
 
-def get_param(module, key):
-    if module.params.get(key):
-        value = module.params[key]
-    elif module.params.get('provider'):
-        value = module.params['provider'].get(key)
-    else:
-        value = None
-    return value
-
-
 def map_params_to_obj(module, param_to_xpath_map, param=None):
     """
     Creates a new dictionary with key as xpath corresponding
@@ -271,7 +291,7 @@ def map_params_to_obj(module, param_to_xpath_map, param=None):
         'value': Value of param.
         'tag_only': Value is indicated by tag only in xml hierarchy.
         'leaf_only': If operation is to be added at leaf node only.
-        'value_req': If value(text) is requried for leaf node.
+        'value_req': If value(text) is required for leaf node.
         'is_key': If the field is key or not.
     eg: Output
     {

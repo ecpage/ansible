@@ -23,12 +23,13 @@ description:
 version_added: "2.6"
 author:
   - "David Gunter (@verkaufer)"
-  - "Chris Hoffman (@chrishoffman, creator of NPM Ansible module)"
+  - "Chris Hoffman (@chrishoffman), creator of NPM Ansible module)"
 options:
   name:
     description:
       - The name of a node.js library to install
       - If omitted all packages in package.json are installed.
+      - To globally install from local node.js library. Prepend "file:" to the path of the node.js library.
     required: false
   path:
     description:
@@ -120,17 +121,17 @@ RETURN = '''
 changed:
     description: Whether Yarn changed any package data
     returned: always
-    type: boolean
+    type: bool
     sample: true
 msg:
     description: Provides an error message if Yarn syntax was incorrect
     returned: failure
-    type: string
+    type: str
     sample: "Package must be explicitly named when uninstalling."
 invocation:
     description: Parameters and values used during execution
     returned: success
-    type: dictionary
+    type: dict
     sample: {
             "module_args": {
                 "executable": null,
@@ -147,7 +148,7 @@ invocation:
 out:
     description: Output generated from Yarn with emojis removed.
     returned: always
-    type: string
+    type: str
     sample: "yarn add v0.16.1[1/4] Resolving packages...[2/4] Fetching packages...[3/4] Linking dependencies...[4/4]
     Building fresh packages...success Saved lockfile.success Saved 1 new dependency..left-pad@1.1.3 Done in 0.59s."
 '''
@@ -183,6 +184,8 @@ class Yarn(object):
 
         if kwargs['version'] and self.name is not None:
             self.name_version = self.name + '@' + str(self.version)
+        elif self.name is not None:
+            self.name_version = self.name
 
     def _exec(self, args, run_in_check_mode=False, check_rc=True):
         if not self.module.check_mode or (self.module.check_mode and run_in_check_mode):

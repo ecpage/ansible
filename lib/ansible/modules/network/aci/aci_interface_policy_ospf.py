@@ -9,7 +9,7 @@ __metaclass__ = type
 
 ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'status': ['preview'],
-                    'supported_by': 'community'}
+                    'supported_by': 'certified'}
 
 DOCUMENTATION = r'''
 ---
@@ -17,16 +17,12 @@ module: aci_interface_policy_ospf
 short_description: Manage OSPF interface policies (ospf:IfPol)
 description:
 - Manage OSPF interface policies on Cisco ACI fabrics.
-notes:
-- More information about the internal APIC class B(ospf:IfPol) from
-  L(the APIC Management Information Model reference,https://developer.cisco.com/docs/apic-mim-ref/).
-author:
-- Dag Wieers (@dagwieers)
 version_added: '2.7'
 options:
   tenant:
     description:
     - The name of the Tenant the OSPF interface policy should belong to.
+    type: str
     required: yes
     aliases: [ tenant_name ]
   ospf:
@@ -34,17 +30,20 @@ options:
     - The OSPF interface policy name.
     - This name can be between 1 and 64 alphanumeric characters.
     - Note that you cannot change this name after the object has been saved.
+    type: str
     required: yes
     aliases: [ ospf_interface, name ]
   description:
     description:
     - The description for the OSPF interface.
+    type: str
     aliases: [ descr ]
   network_type:
     description:
     - The OSPF interface policy network type.
     - OSPF supports broadcast and point-to-point.
     - The APIC defaults to C(unspecified) when unset during creation.
+    type: str
     choices: [ bcast, p2p ]
   cost:
     description:
@@ -63,6 +62,7 @@ options:
       interface subconfiguration mode command.
     - Accepted values range between C(1) and C(450).
     - The APIC defaults to C(0) when unset during creation.
+    type: int
   controls:
     description:
     - The interface policy controls.
@@ -109,7 +109,7 @@ options:
     description:
     - The interval between LSA retransmissions.
     - The retransmit interval occurs while the router is waiting for an acknowledgement from the neighbor router that it received the LSA.
-    - If no acknowlegment is received at the end of the interval, then the LSA is resent.
+    - If no acknowledgment is received at the end of the interval, then the LSA is resent.
     - Accepted values range between C(1) and C(65535).
     - The APIC defaults to C(5) when unset during creation.
     type: int
@@ -125,9 +125,21 @@ options:
     description:
     - Use C(present) or C(absent) for adding or removing.
     - Use C(query) for listing an object or multiple objects.
+    type: str
     choices: [ absent, present, query ]
     default: present
+  name_alias:
+    version_added: '2.10'
+    description:
+    - The alias for the current object. This relates to the nameAlias field in ACI.
+    type: str
 extends_documentation_fragment: aci
+seealso:
+- name: APIC Management Information Model reference
+  description: More information about the internal APIC class B(ospf:IfPol).
+  link: https://developer.cisco.com/docs/apic-mim-ref/
+author:
+- Dag Wieers (@dagwieers)
 '''
 
 EXAMPLES = r'''
@@ -205,7 +217,7 @@ error:
 raw:
   description: The raw output returned by the APIC REST API (xml or json)
   returned: parse error
-  type: string
+  type: str
   sample: '<?xml version="1.0" encoding="UTF-8"?><imdata totalCount="1"><error code="122" text="unknown managed object class foo"/></imdata>'
 sent:
   description: The actual/minimal configuration pushed to the APIC
@@ -254,17 +266,17 @@ proposed:
 filter_string:
   description: The filter string used for the request
   returned: failure or debug
-  type: string
+  type: str
   sample: ?rsp-prop-include=config-only
 method:
   description: The HTTP method used for the request to the APIC
   returned: failure or debug
-  type: string
+  type: str
   sample: POST
 response:
   description: The HTTP response from the APIC
   returned: failure or debug
-  type: string
+  type: str
   sample: OK (30 bytes)
 status:
   description: The HTTP status from the APIC
@@ -274,19 +286,19 @@ status:
 url:
   description: The HTTP url used for the request to the APIC
   returned: failure or debug
-  type: string
+  type: str
   sample: https://10.11.12.13/api/mo/uni/tn-production.json
 '''
 
-from ansible.module_utils.network.aci.aci import ACIModule, aci_argument_spec
 from ansible.module_utils.basic import AnsibleModule
+from ansible.module_utils.network.aci.aci import ACIModule, aci_argument_spec
 
 
 def main():
     argument_spec = aci_argument_spec()
     argument_spec.update(
-        tenant=dict(type='str', required=False, aliases=['tenant_name']),  # Not required for querying all objects
-        ospf=dict(type='str', required=False, aliases=['ospf_interface', 'name']),  # Not required for querying all objects
+        tenant=dict(type='str', aliases=['tenant_name']),  # Not required for querying all objects
+        ospf=dict(type='str', aliases=['ospf_interface', 'name']),  # Not required for querying all objects
         description=dict(type='str', aliases=['descr']),
         network_type=dict(type='str', choices=['bcast', 'p2p']),
         cost=dict(type='int'),
@@ -298,6 +310,7 @@ def main():
         retransmit_interval=dict(type='int'),
         transmit_delay=dict(type='int'),
         state=dict(type='str', default='present', choices=['absent', 'present', 'query']),
+        name_alias=dict(type='str'),
     )
 
     module = AnsibleModule(
@@ -311,42 +324,43 @@ def main():
 
     aci = ACIModule(module)
 
-    tenant = module.params['tenant']
-    ospf = module.params['ospf']
-    description = module.params['description']
+    tenant = module.params.get('tenant')
+    ospf = module.params.get('ospf')
+    description = module.params.get('description')
+    name_alias = module.params.get('name_alias')
 
-    if module.params['controls'] is None:
+    if module.params.get('controls') is None:
         controls = None
     else:
-        controls = ','.join(module.params['controls'])
+        controls = ','.join(module.params.get('controls'))
 
-    cost = module.params['cost']
+    cost = module.params.get('cost')
     if cost is not None and cost not in range(1, 451):
         module.fail_json(msg="Parameter 'cost' is only valid in range between 1 and 450.")
 
-    dead_interval = module.params['dead_interval']
+    dead_interval = module.params.get('dead_interval')
     if dead_interval is not None and dead_interval not in range(1, 65536):
         module.fail_json(msg="Parameter 'dead_interval' is only valid in range between 1 and 65536.")
 
-    hello_interval = module.params['hello_interval']
+    hello_interval = module.params.get('hello_interval')
     if hello_interval is not None and hello_interval not in range(1, 65536):
         module.fail_json(msg="Parameter 'hello_interval' is only valid in range between 1 and 65536.")
 
-    network_type = module.params['network_type']
-    prefix_suppression = aci.boolean(module.params['prefix_suppression'], 'enabled', 'disabled')
-    priority = module.params['priority']
+    network_type = module.params.get('network_type')
+    prefix_suppression = aci.boolean(module.params.get('prefix_suppression'), 'enabled', 'disabled')
+    priority = module.params.get('priority')
     if priority is not None and priority not in range(0, 256):
         module.fail_json(msg="Parameter 'priority' is only valid in range between 1 and 255.")
 
-    retransmit_interval = module.params['retransmit_interval']
+    retransmit_interval = module.params.get('retransmit_interval')
     if retransmit_interval is not None and retransmit_interval not in range(1, 65536):
         module.fail_json(msg="Parameter 'retransmit_interval' is only valid in range between 1 and 65536.")
 
-    transmit_delay = module.params['transmit_delay']
+    transmit_delay = module.params.get('transmit_delay')
     if transmit_delay is not None and transmit_delay not in range(1, 451):
         module.fail_json(msg="Parameter 'transmit_delay' is only valid in range between 1 and 450.")
 
-    state = module.params['state']
+    state = module.params.get('state')
 
     aci.construct_url(
         root_class=dict(
@@ -374,6 +388,7 @@ def main():
                 prio=priority,
                 rexmitIntvl=retransmit_interval,
                 xmitDelay=transmit_delay,
+                nameAlias=name_alias,
             ),
         )
 

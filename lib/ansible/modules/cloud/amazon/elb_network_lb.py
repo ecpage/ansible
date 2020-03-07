@@ -3,6 +3,9 @@
 # Copyright: (c) 2018, Rob White (@wimnat)
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
+from __future__ import (absolute_import, division, print_function)
+__metaclass__ = type
+
 ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'status': ['preview'],
                     'supported_by': 'community'}
@@ -21,63 +24,101 @@ options:
   cross_zone_load_balancing:
     description:
       - Indicates whether cross-zone load balancing is enabled.
-    required: false
-    default: no
+    default: false
     type: bool
   deletion_protection:
     description:
       - Indicates whether deletion protection for the ELB is enabled.
-    required: false
-    default: no
+    default: false
     type: bool
   listeners:
     description:
       - A list of dicts containing listeners to attach to the ELB. See examples for detail of the dict required. Note that listener keys
         are CamelCased.
-    required: false
+    type: list
+    elements: dict
+    suboptions:
+        Port:
+            description: The port on which the load balancer is listening.
+            type: int
+            required: true
+        Protocol:
+            description: The protocol for connections from clients to the load balancer.
+            type: str
+            required: true
+        Certificates:
+            description: The SSL server certificate.
+            type: list
+            elements: dict
+            suboptions:
+                CertificateArn:
+                    description: The Amazon Resource Name (ARN) of the certificate.
+                    type: str
+        SslPolicy:
+            description: The security policy that defines which ciphers and protocols are supported.
+            type: str
+        DefaultActions:
+            description: The default actions for the listener.
+            required: true
+            type: list
+            elements: dict
+            suboptions:
+                Type:
+                    description: The type of action.
+                    type: str
+                TargetGroupArn:
+                    description: The Amazon Resource Name (ARN) of the target group.
+                    type: str
   name:
     description:
       - The name of the load balancer. This name must be unique within your AWS account, can have a maximum of 32 characters, must contain only alphanumeric
         characters or hyphens, and must not begin or end with a hyphen.
     required: true
+    type: str
   purge_listeners:
     description:
-      - If yes, existing listeners will be purged from the ELB to match exactly what is defined by I(listeners) parameter. If the I(listeners) parameter is
-        not set then listeners will not be modified
-    default: yes
+      - If I(purge_listeners=true), existing listeners will be purged from the ELB to match exactly what is defined by I(listeners) parameter.
+      - If the I(listeners) parameter is not set then listeners will not be modified.
+    default: true
     type: bool
   purge_tags:
     description:
-      - If yes, existing tags will be purged from the resource to match exactly what is defined by I(tags) parameter. If the I(tags) parameter is not set then
-        tags will not be modified.
-    required: false
-    default: yes
+      - If I(purge_tags=true), existing tags will be purged from the resource to match exactly what is defined by I(tags) parameter.
+      - If the I(tags) parameter is not set then tags will not be modified.
+    default: true
     type: bool
   subnet_mappings:
     description:
       - A list of dicts containing the IDs of the subnets to attach to the load balancer. You can also specify the allocation ID of an Elastic IP
-        to attach to the load balancer. You can specify one Elastic IP address per subnet. This parameter is mutually exclusive with I(subnets)
-    required: false
+        to attach to the load balancer. You can specify one Elastic IP address per subnet.
+      - This parameter is mutually exclusive with I(subnets).
+    type: list
+    elements: dict
   subnets:
     description:
       - A list of the IDs of the subnets to attach to the load balancer. You can specify only one subnet per Availability Zone. You must specify subnets from
-        at least two Availability Zones. Required if state=present. This parameter is mutually exclusive with I(subnet_mappings)
-    required: false
+        at least two Availability Zones.
+      - Required when I(state=present).
+      - This parameter is mutually exclusive with I(subnet_mappings).
+    type: list
   scheme:
     description:
       - Internet-facing or internal load balancer. An ELB scheme can not be modified after creation.
-    required: false
     default: internet-facing
     choices: [ 'internet-facing', 'internal' ]
+    type: str
   state:
     description:
       - Create or destroy the load balancer.
-    required: true
+      - The current default is C(absent).  However, this behavior is inconsistent with other modules
+        and as such the default will change to C(present) in 2.14.
+        To maintain the existing behavior explicitly set I(state=absent).
     choices: [ 'present', 'absent' ]
+    type: str
   tags:
     description:
       - A dictionary of one or more tags to assign to the load balancer.
-    required: false
+    type: dict
   wait:
     description:
       - Whether or not to wait for the network load balancer to reach the desired state.
@@ -85,6 +126,7 @@ options:
   wait_timeout:
     description:
       - The duration in seconds to wait, used in conjunction with I(wait).
+    type: int
 extends_documentation_fragment:
     - aws
     - ec2
@@ -103,7 +145,7 @@ EXAMPLES = '''
       - subnet-012345678
       - subnet-abcdef000
     listeners:
-      - Protocol: TCP # Required. The protocol for connections from clients to the load balancer (Only TCP is available) (case-sensitive).
+      - Protocol: TCP # Required. The protocol for connections from clients to the load balancer (TCP, TLS, UDP or TCP_UDP) (case-sensitive).
         Port: 80 # Required. The port on which the load balancer is listening.
         DefaultActions:
           - Type: forward # Required. Only 'forward' is accepted at this time
@@ -117,7 +159,7 @@ EXAMPLES = '''
       - SubnetId: subnet-012345678
         AllocationId: eipalloc-aabbccdd
     listeners:
-      - Protocol: TCP # Required. The protocol for connections from clients to the load balancer (Only TCP is available) (case-sensitive).
+      - Protocol: TCP # Required. The protocol for connections from clients to the load balancer (TCP, TLS, UDP or TCP_UDP) (case-sensitive).
         Port: 80 # Required. The port on which the load balancer is listening.
         DefaultActions:
           - Type: forward # Required. Only 'forward' is accepted at this time
@@ -140,32 +182,32 @@ availability_zones:
 canonical_hosted_zone_id:
     description: The ID of the Amazon Route 53 hosted zone associated with the load balancer.
     returned: when state is present
-    type: string
+    type: str
     sample: ABCDEF12345678
 created_time:
     description: The date and time the load balancer was created.
     returned: when state is present
-    type: string
+    type: str
     sample: "2015-02-12T02:14:02+00:00"
 deletion_protection_enabled:
     description: Indicates whether deletion protection is enabled.
     returned: when state is present
-    type: string
+    type: str
     sample: true
 dns_name:
     description: The public DNS name of the load balancer.
     returned: when state is present
-    type: string
+    type: str
     sample: internal-my-elb-123456789.ap-southeast-2.elb.amazonaws.com
 idle_timeout_timeout_seconds:
     description: The idle timeout value, in seconds.
     returned: when state is present
-    type: string
+    type: str
     sample: 60
 ip_address_type:
     description:  The type of IP addresses used by the subnets for the load balancer.
     returned: when state is present
-    type: string
+    type: str
     sample: ipv4
 listeners:
     description: Information about the listeners.
@@ -175,12 +217,12 @@ listeners:
         listener_arn:
             description: The Amazon Resource Name (ARN) of the listener.
             returned: when state is present
-            type: string
+            type: str
             sample: ""
         load_balancer_arn:
             description: The Amazon Resource Name (ARN) of the load balancer.
             returned: when state is present
-            type: string
+            type: str
             sample: ""
         port:
             description: The port on which the load balancer is listening.
@@ -190,7 +232,7 @@ listeners:
         protocol:
             description: The protocol for connections from clients to the load balancer.
             returned: when state is present
-            type: string
+            type: str
             sample: HTTPS
         certificates:
             description: The SSL server certificate.
@@ -200,47 +242,47 @@ listeners:
                 certificate_arn:
                     description: The Amazon Resource Name (ARN) of the certificate.
                     returned: when state is present
-                    type: string
+                    type: str
                     sample: ""
         ssl_policy:
             description: The security policy that defines which ciphers and protocols are supported.
             returned: when state is present
-            type: string
+            type: str
             sample: ""
         default_actions:
             description: The default actions for the listener.
             returned: when state is present
-            type: string
+            type: str
             contains:
                 type:
                     description: The type of action.
                     returned: when state is present
-                    type: string
+                    type: str
                     sample: ""
                 target_group_arn:
                     description: The Amazon Resource Name (ARN) of the target group.
                     returned: when state is present
-                    type: string
+                    type: str
                     sample: ""
 load_balancer_arn:
     description: The Amazon Resource Name (ARN) of the load balancer.
     returned: when state is present
-    type: string
+    type: str
     sample: arn:aws:elasticloadbalancing:ap-southeast-2:0123456789:loadbalancer/app/my-elb/001122334455
 load_balancer_name:
     description: The name of the load balancer.
     returned: when state is present
-    type: string
+    type: str
     sample: my-elb
 load_balancing_cross_zone_enabled:
     description: Indicates whether cross-zone load balancing is enabled.
     returned: when state is present
-    type: string
+    type: str
     sample: true
 scheme:
     description: Internet-facing or internal load balancer.
     returned: when state is present
-    type: string
+    type: str
     sample: internal
 state:
     description: The state of the load balancer.
@@ -257,12 +299,12 @@ tags:
 type:
     description: The type of load balancer.
     returned: when state is present
-    type: string
+    type: str
     sample: network
 vpc_id:
     description: The ID of the VPC for the load balancer.
     returned: when state is present
-    type: string
+    type: str
     sample: vpc-0011223344
 '''
 
@@ -397,13 +439,20 @@ def main():
         if module.params.get("subnets") is None and module.params.get("subnet_mappings") is None:
             module.fail_json(msg="'subnets' or 'subnet_mappings' is required when state=present")
 
+    if state is None:
+        # See below, unless state==present we delete.  Ouch.
+        module.deprecate('State currently defaults to absent.  This is inconsistent with other modules'
+                         ' and the default will be changed to `present` in Ansible 2.14',
+                         version='2.14')
+
     # Quick check of listeners parameters
     listeners = module.params.get("listeners")
     if listeners is not None:
         for listener in listeners:
             for key in listener.keys():
-                if key == 'Protocol' and listener[key] != 'TCP':
-                    module.fail_json(msg="'Protocol' must be 'TCP'")
+                protocols_list = ['TCP', 'TLS', 'UDP', 'TCP_UDP']
+                if key == 'Protocol' and listener[key] not in protocols_list:
+                    module.fail_json(msg="'Protocol' must be either " + ", ".join(protocols_list))
 
     connection = module.client('elbv2')
     connection_ec2 = module.client('ec2')

@@ -19,7 +19,7 @@
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
-from ansible.compat.tests.mock import patch
+from units.compat.mock import patch
 from ansible.modules.network.eos import eos_eapi
 from units.modules.utils import set_module_args
 from .eos_module import TestEosModule, load_fixture
@@ -134,13 +134,17 @@ class TestEosEapiModule(TestEosModule):
 
     def test_eos_eapi_vrf(self):
         set_module_args(dict(vrf='test'))
-        commands = ['management api http-commands', 'vrf test', 'no shutdown']
+        commands = ['management api http-commands', 'no shutdown', 'vrf test', 'no shutdown']
         self.start_unconfigured(changed=True, commands=commands)
 
     def test_eos_eapi_change_from_default_vrf(self):
         set_module_args(dict(vrf='test'))
         commands = ['management api http-commands', 'vrf test', 'no shutdown']
         self.start_configured(changed=True, commands=commands)
+
+    def test_eos_eapi_default(self):
+        set_module_args(dict())
+        self.start_configured(changed=False, commands=[])
 
     def test_eos_eapi_vrf_missing(self):
         set_module_args(dict(vrf='missing'))
@@ -150,12 +154,6 @@ class TestEosEapiModule(TestEosModule):
         set_module_args(dict(state='stopped'))
         commands = ['management api http-commands', 'shutdown']
         self.start_configured(changed=True, commands=commands)
-
-    def test_eos_eapi_state_failed(self):
-        self.mock_verify_state.stop()
-        set_module_args(dict(state='stopped', timeout=1))
-        result = self.start_configured(failed=True)
-        'timeout expired before eapi running state changed' in result['msg']
 
     def test_eos_eapi_state_failed(self):
         self.mock_verify_state.stop()

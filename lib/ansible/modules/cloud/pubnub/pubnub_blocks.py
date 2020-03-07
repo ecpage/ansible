@@ -57,7 +57,7 @@ options:
     description:
       - "Name of PubNub account for from which C(application) will be used to
       manage blocks."
-      - "User\'s account will be used if value not set or empty."
+      - "User's account will be used if value not set or empty."
     required: false
     version_added: '2.4'
   application:
@@ -82,9 +82,9 @@ options:
     required: true
   description:
     description:
-        - "Short block description which will be later visible on
-        admin.pubnub.com. Used only if block doesn\'t exists and won\'t change
-        description for existing block."
+        - Short block description which will be later visible on
+          admin.pubnub.com. Used only if block doesn't exists and won't change
+          description for existing block.
     required: false
     default: 'New block'
   event_handlers:
@@ -124,6 +124,7 @@ options:
       - If check should be ignored C(False) should be passed to this parameter.
     required: false
     default: true
+    type: bool
 '''
 
 EXAMPLES = '''
@@ -228,7 +229,7 @@ try:
     # Import PubNub BLOCKS client.
     from pubnub_blocks_client import User, Account, Owner, Application, Keyset
     from pubnub_blocks_client import Block, EventHandler
-    import pubnub_blocks_client.exceptions as exceptions
+    from pubnub_blocks_client import exceptions
     HAS_PUBNUB_BLOCKS_CLIENT = True
 except ImportError:
     HAS_PUBNUB_BLOCKS_CLIENT = False

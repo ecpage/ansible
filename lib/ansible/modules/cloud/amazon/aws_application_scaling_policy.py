@@ -21,20 +21,28 @@ description:
     - Creates, updates or removes a Scaling Policy
 version_added: "2.5"
 author:
-    - Gustavo Maia(@gurumaia)
-    - Chen Leibovich(@chenl87)
+    - Gustavo Maia (@gurumaia)
+    - Chen Leibovich (@chenl87)
 requirements: [ json, botocore, boto3 ]
 options:
+    state:
+        description: Whether a policy should be present or absent
+        required: yes
+        choices: ['absent', 'present']
+        type: str
     policy_name:
         description: The name of the scaling policy.
         required: yes
+        type: str
     service_namespace:
         description: The namespace of the AWS service.
         required: yes
         choices: ['ecs', 'elasticmapreduce', 'ec2', 'appstream', 'dynamodb']
+        type: str
     resource_id:
         description: The identifier of the resource associated with the scalable target.
         required: yes
+        type: str
     scalable_dimension:
         description: The scalable dimension associated with the scalable target.
         required: yes
@@ -46,26 +54,54 @@ options:
                    'dynamodb:table:WriteCapacityUnits',
                    'dynamodb:index:ReadCapacityUnits',
                    'dynamodb:index:WriteCapacityUnits']
+        type: str
     policy_type:
         description: The policy type.
         required: yes
         choices: ['StepScaling', 'TargetTrackingScaling']
+        type: str
     step_scaling_policy_configuration:
         description: A step scaling policy. This parameter is required if you are creating a policy and the policy type is StepScaling.
         required: no
+        type: dict
     target_tracking_scaling_policy_configuration:
-        description: A target tracking policy. This parameter is required if you are creating a new policy and the policy type is TargetTrackingScaling.
+        description:
+            - A target tracking policy. This parameter is required if you are creating a new policy and the policy type is TargetTrackingScaling.
+            - 'Full documentation of the suboptions can be found in the API documentation:'
+            - 'U(https://docs.aws.amazon.com/autoscaling/application/APIReference/API_TargetTrackingScalingPolicyConfiguration.html)'
         required: no
+        type: dict
+        suboptions:
+            CustomizedMetricSpecification:
+                description: The metric to use if using a customized metric.
+                type: dict
+            DisableScaleIn:
+                description: Whether scaling-in should be disabled.
+                type: bool
+            PredefinedMetricSpecification:
+                description: The metric to use if using a predefined metric.
+                type: dict
+            ScaleInCooldown:
+                description: The time (in seconds) to wait after scaling-in before another scaling action can occur.
+                type: int
+            ScaleOutCooldown:
+                description: The time (in seconds) to wait after scaling-out before another scaling action can occur.
+                type: int
+            TargetValue:
+                description: The target value for the metric
+                type: float
     minimum_tasks:
         description: The minimum value to scale to in response to a scale in event.
             This parameter is required if you are creating a first new policy for the specified service.
         required: no
         version_added: "2.6"
+        type: int
     maximum_tasks:
         description: The maximum value to scale to in response to a scale out event.
             This parameter is required if you are creating a first new policy for the specified service.
         required: no
         version_added: "2.6"
+        type: int
     override_task_capacity:
         description: Whether or not to override values of minimum and/or maximum tasks if it's already set.
         required: no
@@ -139,38 +175,38 @@ alarms:
         alarm_arn:
             description: The Amazon Resource Name (ARN) of the alarm
             returned: when state present
-            type: string
+            type: str
         alarm_name:
             description: The name of the alarm
             returned: when state present
-            type: string
+            type: str
 service_namespace:
     description: The namespace of the AWS service.
     returned: when state present
-    type: string
+    type: str
     sample: ecs
 resource_id:
     description: The identifier of the resource associated with the scalable target.
     returned: when state present
-    type: string
+    type: str
     sample: service/cluster-name/service-name
 scalable_dimension:
     description: The scalable dimension associated with the scalable target.
     returned: when state present
-    type: string
+    type: str
     sample: ecs:service:DesiredCount
 policy_arn:
     description: The Amazon Resource Name (ARN) of the scaling policy..
     returned: when state present
-    type: string
+    type: str
 policy_name:
     description: The name of the scaling policy.
     returned: when state present
-    type: string
+    type: str
 policy_type:
     description: The policy type.
     returned: when state present
-    type: string
+    type: str
 min_capacity:
     description: The minimum value to scale to in response to a scale in event. Required if I(state) is C(present).
     returned: when state present
@@ -184,7 +220,7 @@ max_capacity:
 role_arn:
     description: The ARN of an IAM role that allows Application Auto Scaling to modify the scalable target on your behalf. Required if I(state) is C(present).
     returned: when state present
-    type: string
+    type: str
     sample: arn:aws:iam::123456789123:role/roleName
 step_scaling_policy_configuration:
     description: The step scaling policy.
@@ -194,7 +230,7 @@ step_scaling_policy_configuration:
         adjustment_type:
             description: The adjustment type
             returned: when state present and the policy type is StepScaling
-            type: string
+            type: str
             sample: "ChangeInCapacity, PercentChangeInCapacity, ExactCapacity"
         cooldown:
             description: The amount of time, in seconds, after a scaling activity completes
@@ -205,12 +241,13 @@ step_scaling_policy_configuration:
         metric_aggregation_type:
             description: The aggregation type for the CloudWatch metrics
             returned: when state present and the policy type is StepScaling
-            type: string
+            type: str
             sample: "Average, Minimum, Maximum"
         step_adjustments:
             description: A set of adjustments that enable you to scale based on the size of the alarm breach
             returned: when state present and the policy type is StepScaling
-            type: list of complex
+            type: list
+            elements: dict
 target_tracking_scaling_policy_configuration:
     description: The target tracking policy.
     returned: when state present and the policy type is TargetTrackingScaling
@@ -224,12 +261,12 @@ target_tracking_scaling_policy_configuration:
                 predefined_metric_type:
                     description: The metric type
                     returned: when state present and the policy type is TargetTrackingScaling
-                    type: string
+                    type: str
                     sample: "ECSServiceAverageCPUUtilization, ECSServiceAverageMemoryUtilization"
                 resource_label:
                     description: Identifies the resource associated with the metric type
                     returned: when metric type is ALBRequestCountPerTarget
-                    type: string
+                    type: str
         scale_in_cooldown:
             description: The amount of time, in seconds, after a scale in activity completes before another scale in activity can start
             returned: when state present and the policy type is TargetTrackingScaling
@@ -248,14 +285,12 @@ target_tracking_scaling_policy_configuration:
 creation_time:
     description: The Unix timestamp for when the scalable target was created.
     returned: when state present
-    type: string
+    type: str
     sample: '2017-09-28T08:22:51.881000-03:00'
 '''  # NOQA
 
-import traceback
-
 from ansible.module_utils.aws.core import AnsibleAWSModule
-from ansible.module_utils.ec2 import _camel_to_snake, camel_dict_to_snake_dict, ec2_argument_spec
+from ansible.module_utils.ec2 import _camel_to_snake, camel_dict_to_snake_dict
 
 try:
     import botocore
@@ -317,7 +352,7 @@ def create_scalable_target(connection, module):
             ScalableDimension=module.params.get('scalable_dimension')
         )
     except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
-            module.fail_json_aws(e, msg="Failed to describe scalable targets")
+        module.fail_json_aws(e, msg="Failed to describe scalable targets")
 
     # Scalable target registration will occur if:
     # 1. There is no scalable target registered for this service
@@ -445,25 +480,24 @@ def create_scaling_policy(connection, module):
 
 
 def main():
-    argument_spec = ec2_argument_spec()
-    argument_spec.update(dict(
-        state=dict(required=True, choices=['present', 'absent'], type='str'),
-        policy_name=dict(required=True, type='str'),
-        service_namespace=dict(required=True, choices=['ecs', 'elasticmapreduce', 'ec2', 'appstream', 'dynamodb'], type='str'),
-        resource_id=dict(required=True, type='str'),
-        scalable_dimension=dict(required=True, choices=['ecs:service:DesiredCount',
-                                                        'ec2:spot-fleet-request:TargetCapacity',
-                                                        'elasticmapreduce:instancegroup:InstanceCount',
-                                                        'appstream:fleet:DesiredCapacity',
-                                                        'dynamodb:table:ReadCapacityUnits',
-                                                        'dynamodb:table:WriteCapacityUnits',
-                                                        'dynamodb:index:ReadCapacityUnits',
-                                                        'dynamodb:index:WriteCapacityUnits'
-                                                        ], type='str'),
-        policy_type=dict(required=True, choices=['StepScaling', 'TargetTrackingScaling'], type='str'),
-        step_scaling_policy_configuration=dict(required=False, type='dict'),
+    argument_spec = dict(
+        state=dict(type='str', required=True, choices=['present', 'absent']),
+        policy_name=dict(type='str', required=True),
+        service_namespace=dict(type='str', required=True, choices=['appstream', 'dynamodb', 'ec2', 'ecs', 'elasticmapreduce']),
+        resource_id=dict(type='str', required=True),
+        scalable_dimension=dict(type='str',
+                                required=True,
+                                choices=['ecs:service:DesiredCount',
+                                         'ec2:spot-fleet-request:TargetCapacity',
+                                         'elasticmapreduce:instancegroup:InstanceCount',
+                                         'appstream:fleet:DesiredCapacity',
+                                         'dynamodb:table:ReadCapacityUnits',
+                                         'dynamodb:table:WriteCapacityUnits',
+                                         'dynamodb:index:ReadCapacityUnits',
+                                         'dynamodb:index:WriteCapacityUnits']),
+        policy_type=dict(type='str', required=True, choices=['StepScaling', 'TargetTrackingScaling']),
+        step_scaling_policy_configuration=dict(type='dict'),
         target_tracking_scaling_policy_configuration=dict(
-            required=False,
             type='dict',
             options=dict(
                 CustomizedMetricSpecification=dict(type='dict'),
@@ -474,10 +508,10 @@ def main():
                 TargetValue=dict(type='float'),
             )
         ),
-        minimum_tasks=dict(required=False, type='int'),
-        maximum_tasks=dict(required=False, type='int'),
-        override_task_capacity=dict(required=False, type=bool)
-    ))
+        minimum_tasks=dict(type='int'),
+        maximum_tasks=dict(type='int'),
+        override_task_capacity=dict(type='bool'),
+    )
 
     module = AnsibleAWSModule(argument_spec=argument_spec, supports_check_mode=True)
 

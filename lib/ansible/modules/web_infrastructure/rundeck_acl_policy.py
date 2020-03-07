@@ -55,6 +55,25 @@ options:
             - Sets the ACL policy content.
             - ACL policy content is a YAML object as described in http://rundeck.org/docs/man5/aclpolicy.html.
             - It can be a YAML string or a pure Ansible inventory YAML object.
+    client_cert:
+        version_added: '2.10'
+    client_key:
+        version_added: '2.10'
+    force:
+        version_added: '2.10'
+    force_basic_auth:
+        version_added: '2.10'
+    http_agent:
+        version_added: '2.10'
+    url_password:
+        version_added: '2.10'
+    url_username:
+        version_added: '2.10'
+    use_proxy:
+        version_added: '2.10'
+    validate_certs:
+        version_added: '2.10'
+extends_documentation_fragment: url
 '''
 
 EXAMPLES = '''
@@ -88,20 +107,21 @@ RETURN = '''
 rundeck_response:
     description: Rundeck response when a failure occurs.
     returned: failed
-    type: string
+    type: str
 before:
-    description: dictionnary containing ACL policy informations before modification.
+    description: Dictionary containing ACL policy informations before modification.
     returned: success
     type: dict
 after:
-    description: dictionnary containing ACL policy informations after modification.
+    description: Dictionary containing ACL policy informations after modification.
     returned: success
     type: dict
 '''
 
 # import module snippets
 from ansible.module_utils.basic import AnsibleModule
-from ansible.module_utils.urls import fetch_url
+from ansible.module_utils.urls import fetch_url, url_argument_spec
+from ansible.module_utils._text import to_text
 import json
 
 
@@ -130,9 +150,9 @@ class RundeckACLManager:
         self.handle_http_code_if_needed(info)
         if resp is not None:
             resp = resp.read()
-            if resp != "":
+            if resp != b"":
                 try:
-                    json_resp = json.loads(resp)
+                    json_resp = json.loads(to_text(resp, errors='surrogate_or_strict'))
                     return json_resp, info
                 except ValueError as e:
                     self.module.fail_json(msg="Rundeck response was not a valid JSON. Exception was: %s. "
@@ -195,16 +215,20 @@ class RundeckACLManager:
 
 
 def main():
+    # Also allow the user to set values for fetch_url
+    argument_spec = url_argument_spec()
+    argument_spec.update(dict(
+        state=dict(type='str', choices=['present', 'absent'], default='present'),
+        name=dict(required=True, type='str'),
+        url=dict(required=True, type='str'),
+        api_version=dict(type='int', default=14),
+        token=dict(required=True, type='str', no_log=True),
+        policy=dict(type='str'),
+        project=dict(type='str'),
+    ))
+
     module = AnsibleModule(
-        argument_spec=dict(
-            state=dict(type='str', choices=['present', 'absent'], default='present'),
-            name=dict(required=True, type='str'),
-            url=dict(required=True, type='str'),
-            api_version=dict(type='int', default=14),
-            token=dict(required=True, type='str', no_log=True),
-            policy=dict(type='str'),
-            project=dict(type='str'),
-        ),
+        argument_spec=argument_spec,
         required_if=[
             ['state', 'present', ['policy']],
         ],

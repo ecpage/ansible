@@ -19,7 +19,7 @@
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
-from ansible.compat.tests.mock import patch, MagicMock
+from units.compat.mock import patch, MagicMock
 from ansible.modules.network.eos import eos_config
 from ansible.plugins.cliconf.eos import Cliconf
 from units.modules.utils import set_module_args
@@ -70,7 +70,7 @@ class TestEosConfigModule(TestEosModule):
         args = dict(lines=lines)
         set_module_args(args)
         self.conn.get_diff = MagicMock(return_value=self.cliconf_obj.get_diff(config, config))
-        result = self.execute_module()
+        self.execute_module()
 
     def test_eos_config_src(self):
         src = load_fixture('eos_config_candidate.cfg')
@@ -134,27 +134,27 @@ class TestEosConfigModule(TestEosModule):
     def test_eos_config_src_and_lines_fails(self):
         args = dict(src='foo', lines='foo')
         set_module_args(args)
-        result = self.execute_module(failed=True)
+        self.execute_module(failed=True)
 
     def test_eos_config_match_exact_requires_lines(self):
         args = dict(match='exact')
         set_module_args(args)
-        result = self.execute_module(failed=True)
+        self.execute_module(failed=True)
 
     def test_eos_config_match_strict_requires_lines(self):
         args = dict(match='strict')
         set_module_args(args)
-        result = self.execute_module(failed=True)
+        self.execute_module(failed=True)
 
     def test_eos_config_replace_block_requires_lines(self):
         args = dict(replace='block')
         set_module_args(args)
-        result = self.execute_module(failed=True)
+        self.execute_module(failed=True)
 
     def test_eos_config_replace_config_requires_src(self):
         args = dict(replace='config')
         set_module_args(args)
-        result = self.execute_module(failed=True)
+        self.execute_module(failed=True)
 
     def test_eos_config_backup_returns__backup__(self):
         args = dict(backup=True)
@@ -171,14 +171,14 @@ class TestEosConfigModule(TestEosModule):
 
         args = dict(save_when='modified')
         set_module_args(args)
-        result = self.execute_module()
+        self.execute_module()
 
         run_commands.return_value = [load_fixture('eos_config_config.cfg'),
                                      load_fixture('eos_config_config_updated.cfg')]
 
         args = dict(save_when='modified')
         set_module_args(args)
-        result = self.execute_module(changed=True)
+        self.execute_module(changed=True)
 
         mock_run_commands.stop()
 
@@ -199,9 +199,9 @@ class TestEosConfigModule(TestEosModule):
         self.assertEqual(self.get_config.call_count, 0)
         self.assertEqual(self.load_config.call_count, 0)
 
-    def test_eos_config_save(self):
+    def test_eos_config_save_always(self):
         self.run_commands.return_value = "hostname foo"
-        set_module_args(dict(save=True))
+        set_module_args(dict(save_when='always'))
         self.execute_module(changed=True)
         self.assertEqual(self.run_commands.call_count, 1)
         self.assertEqual(self.get_config.call_count, 0)

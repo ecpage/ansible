@@ -19,7 +19,7 @@
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
-from ansible.compat.tests.mock import patch
+from units.compat.mock import patch
 from units.modules.utils import set_module_args
 from .iosxr_module import TestIosxrModule, load_fixture
 from ansible.modules.network.iosxr import iosxr_system
@@ -80,7 +80,6 @@ class TestIosxrSystemModule(TestIosxrModule):
     def test_iosxr_system_name_servers(self):
         name_servers = ['8.8.8.8', '8.8.4.4', '1.1.1.1']
         set_module_args(dict(name_servers=name_servers))
-        commands = ['domain name-server 1.1.1.1', 'no domain name-server 8.8.4.4', 'no domain lookup disable']
         self.execute_module(changed=True)
 
     def test_iosxr_system_state_absent(self):

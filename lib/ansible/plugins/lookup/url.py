@@ -26,6 +26,60 @@ options:
     description: Flag to control if the lookup will observe HTTP proxy environment variables when present.
     type: boolean
     default: True
+  username:
+    description: Username to use for HTTP authentication.
+    type: string
+    version_added: "2.8"
+  password:
+    description: Password to use for HTTP authentication.
+    type: string
+    version_added: "2.8"
+  headers:
+    description: HTTP request headers
+    type: dictionary
+    default: {}
+    version_added: "2.9"
+  force:
+    description: Whether or not to set "cache-control" header with value "no-cache"
+    type: boolean
+    version_added: "2.10"
+    default: False
+  timeout:
+    description: How long to wait for the server to send data before giving up
+    type: float
+    version_added: "2.10"
+    default: 10
+  http_agent:
+    description: User-Agent to use in the request
+    type: string
+    version_added: "2.10"
+  force_basic_auth:
+    description: Force basic authentication
+    type: boolean
+    version_added: "2.10"
+    default: False
+  follow_redirects:
+    description: String of urllib2, all/yes, safe, none to determine how redirects are followed, see RedirectHandlerFactory for more information
+    type: string
+    version_added: "2.10"
+    default: 'urllib2'
+  use_gssapi:
+    description: Use GSSAPI handler of requests
+    type: boolean
+    version_added: "2.10"
+    default: False
+  unix_socket:
+    description: String of file system path to unix socket file to use when establishing connection to the provided url
+    type: string
+    version_added: "2.10"
+  ca_path:
+    description: String of file system path to CA cert bundle to use
+    type: string
+    version_added: "2.10"
+  unredirected_headers:
+    description: A list of headers to not attach on a redirected request
+    type: list
+    version_added: "2.10"
 """
 
 EXAMPLES = """
@@ -35,6 +89,15 @@ EXAMPLES = """
 
 - name: display ip ranges
   debug: msg="{{ lookup('url', 'https://ip-ranges.amazonaws.com/ip-ranges.json', split_lines=False) }}"
+
+- name: url lookup using authentication
+  debug: msg="{{ lookup('url', 'https://some.private.site.com/file.txt', username='bob', password='hunter2') }}"
+
+- name: url lookup using basic authentication
+  debug: msg="{{ lookup('url', 'https://some.private.site.com/file.txt', username='bob', password='hunter2', force_basic_auth='True') }}"
+
+- name: url lookup using headers
+  debug: msg="{{ lookup('url', 'https://some.private.site.com/api/service', headers={'header1':'value1', 'header2':'value2'} ) }}"
 """
 
 RETURN = """
@@ -47,12 +110,9 @@ from ansible.module_utils.six.moves.urllib.error import HTTPError, URLError
 from ansible.module_utils._text import to_text, to_native
 from ansible.module_utils.urls import open_url, ConnectionError, SSLValidationError
 from ansible.plugins.lookup import LookupBase
+from ansible.utils.display import Display
 
-try:
-    from __main__ import display
-except ImportError:
-    from ansible.utils.display import Display
-    display = Display()
+display = Display()
 
 
 class LookupModule(LookupBase):
@@ -65,7 +125,20 @@ class LookupModule(LookupBase):
         for term in terms:
             display.vvvv("url lookup connecting to %s" % term)
             try:
-                response = open_url(term, validate_certs=self.get_option('validate_certs'), use_proxy=self.get_option('use_proxy'))
+                response = open_url(term, validate_certs=self.get_option('validate_certs'),
+                                    use_proxy=self.get_option('use_proxy'),
+                                    url_username=self.get_option('username'),
+                                    url_password=self.get_option('password'),
+                                    headers=self.get_option('headers'),
+                                    force=self.get_option('force'),
+                                    timeout=self.get_option('timeout'),
+                                    http_agent=self.get_option('http_agent'),
+                                    force_basic_auth=self.get_option('force_basic_auth'),
+                                    follow_redirects=self.get_option('follow_redirects'),
+                                    use_gssapi=self.get_option('use_gssapi'),
+                                    unix_socket=self.get_option('unix_socket'),
+                                    ca_path=self.get_option('ca_path'),
+                                    unredirected_headers=self.get_option('unredirected_headers'))
             except HTTPError as e:
                 raise AnsibleError("Received HTTP error for %s : %s" % (term, to_native(e)))
             except URLError as e:

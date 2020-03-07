@@ -43,9 +43,9 @@ import os
 import argparse
 import re
 from time import time
-import six
 
-from six.moves import configparser
+from ansible.module_utils import six
+from ansible.module_utils.six.moves import configparser
 
 try:
     import packet
@@ -249,9 +249,14 @@ class PacketInventory(object):
 
     def get_projects(self):
         '''Makes a Packet API call to get the list of projects'''
+
+        params = {
+            'per_page': self.items_per_page
+        }
+
         try:
             manager = self.connect()
-            projects = manager.list_projects()
+            projects = manager.list_projects(params=params)
             return projects
         except Exception as e:
             traceback.print_exc()
@@ -298,10 +303,15 @@ class PacketInventory(object):
         if device.state not in self.packet_device_states:
             return
 
-        # Select the best destination address
+        # Select the best destination address. Only include management
+        # addresses as non-management (elastic) addresses need manual
+        # host configuration to be routable.
+        # See https://help.packet.net/article/54-elastic-ips.
         dest = None
         for ip_address in device.ip_addresses:
-            if ip_address['public'] is True and ip_address['address_family'] == 4:
+            if ip_address['public'] is True and \
+               ip_address['address_family'] == 4 and \
+               ip_address['management'] is True:
                 dest = ip_address['address']
 
         if not dest:
@@ -346,9 +356,9 @@ class PacketInventory(object):
 
         # Inventory: Group by OS
         if self.group_by_operating_system:
-            self.push(self.inventory, device.operating_system.slug, dest)
+            self.push(self.inventory, device.operating_system['slug'], dest)
             if self.nested_groups:
-                self.push_group(self.inventory, 'operating_systems', device.operating_system.slug)
+                self.push_group(self.inventory, 'operating_systems', device.operating_system['slug'])
 
         # Inventory: Group by plan type
         if self.group_by_plan_type:
@@ -395,7 +405,7 @@ class PacketInventory(object):
             elif key == 'packet_facility':
                 device_vars[key] = value['code']
             elif key == 'packet_operating_system':
-                device_vars[key] = value.slug
+                device_vars[key] = value['slug']
             elif key == 'packet_plan':
                 device_vars[key] = value['slug']
             elif key == 'packet_tags':

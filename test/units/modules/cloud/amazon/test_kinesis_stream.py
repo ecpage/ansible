@@ -1,10 +1,14 @@
+# Make coding more python3-ish
+from __future__ import (absolute_import, division, print_function)
+__metaclass__ = type
+
 import pytest
 import unittest
 
 boto3 = pytest.importorskip("boto3")
 botocore = pytest.importorskip("botocore")
 
-import ansible.modules.cloud.amazon.kinesis_stream as kinesis_stream
+from ansible.modules.cloud.amazon import kinesis_stream
 
 aws_region = 'us-west-2'
 

@@ -8,7 +8,7 @@ __metaclass__ = type
 
 ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'status': ['preview'],
-                    'supported_by': 'community'}
+                    'supported_by': 'certified'}
 
 DOCUMENTATION = r'''
 ---
@@ -16,7 +16,6 @@ module: ucs_storage_profile
 short_description: Configures storage profiles on Cisco UCS Manager
 description:
 - Configures storage profiles on Cisco UCS Manager.
-- Examples can be used with the L(UCS Platform Emulator,https://communities.cisco.com/ucspe).
 extends_documentation_fragment: ucs
 options:
   state:

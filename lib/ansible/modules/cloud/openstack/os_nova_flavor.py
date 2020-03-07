@@ -42,6 +42,8 @@ options:
    disk:
      description:
         - Size of local disk, in GB.
+     default: 0
+     type: int
    ephemeral:
      description:
         - Ephemeral space size, in GB.
@@ -113,12 +115,12 @@ flavor:
         id:
             description: Flavor ID.
             returned: success
-            type: string
+            type: str
             sample: "515256b8-7027-4d73-aa54-4e30a4a4a339"
         name:
             description: Flavor name.
             returned: success
-            type: string
+            type: str
             sample: "tiny"
         disk:
             description: Size of local disk, in GB.
@@ -181,8 +183,8 @@ def main():
         # required when state is 'present'
         ram=dict(required=False, type='int'),
         vcpus=dict(required=False, type='int'),
-        disk=dict(required=False, type='int'),
 
+        disk=dict(required=False, default=0, type='int'),
         ephemeral=dict(required=False, default=0, type='int'),
         swap=dict(required=False, default=0, type='int'),
         rxtx_factor=dict(required=False, default=1.0, type='float'),
@@ -212,6 +214,20 @@ def main():
             module.exit_json(changed=_system_state_change(module, flavor))
 
         if state == 'present':
+            old_extra_specs = {}
+            require_update = False
+
+            if flavor:
+                old_extra_specs = flavor['extra_specs']
+                for param_key in ['ram', 'vcpus', 'disk', 'ephemeral', 'swap', 'rxtx_factor', 'is_public']:
+                    if module.params[param_key] != flavor[param_key]:
+                        require_update = True
+                        break
+
+            if flavor and require_update:
+                cloud.delete_flavor(name)
+                flavor = None
+
             if not flavor:
                 flavor = cloud.create_flavor(
                     name=name,
@@ -228,11 +244,10 @@ def main():
             else:
                 changed = False
 
-            old_extra_specs = flavor['extra_specs']
             new_extra_specs = dict([(k, str(v)) for k, v in extra_specs.items()])
-            unset_keys = set(flavor['extra_specs'].keys()) - set(extra_specs.keys())
+            unset_keys = set(old_extra_specs.keys()) - set(extra_specs.keys())
 
-            if unset_keys:
+            if unset_keys and not require_update:
                 cloud.unset_flavor_specs(flavor['id'], unset_keys)
 
             if old_extra_specs != new_extra_specs:

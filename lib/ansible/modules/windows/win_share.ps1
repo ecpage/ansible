@@ -47,106 +47,112 @@ $check_mode = Get-AnsibleParam -obj $params -name "_ansible_check_mode" -type "b
 
 $name = Get-AnsibleParam -obj $params -name "name" -type "str" -failifempty $true
 $state = Get-AnsibleParam -obj $params -name "state" -type "str" -default "present" -validateset "present","absent"
+$rule_action  = Get-AnsibleParam -obj $params -name "rule_action" -type "str" -default "set" -validateset "set","add"
 
 if (-not (Get-Command -Name Get-SmbShare -ErrorAction SilentlyContinue)) {
     Fail-Json $result "The current host does not support the -SmbShare cmdlets required by this module. Please run on Server 2012 or Windows 8 and later"
 }
 
-Try {
-    $share = Get-SmbShare -Name $name -ErrorAction SilentlyContinue
-    If ($state -eq "absent") {
-        If ($share) {
-            # See message around -WhatIf where $check_mode is defined
-            if (-not $check_mode) {
-                Remove-SmbShare -Force -Name $name | Out-Null
-            }
-            $result.actions += "Remove-SmbShare -Force -Name $name"
-            $result.changed = $true
+$share = Get-SmbShare -Name $name -ErrorAction SilentlyContinue
+If ($state -eq "absent") {
+    If ($share) {
+        # See message around -WhatIf where $check_mode is defined
+        if (-not $check_mode) {
+            Remove-SmbShare -Force -Name $name | Out-Null
         }
-    } Else {
-        $path = Get-AnsibleParam -obj $params -name "path" -type "path" -failifempty $true
-        $description = Get-AnsibleParam -obj $params -name "description" -type "str" -default ""
+        $result.actions += "Remove-SmbShare -Force -Name $name"
+        $result.changed = $true
+    }
+} Else {
+    $path = Get-AnsibleParam -obj $params -name "path" -type "path" -failifempty $true
+    $description = Get-AnsibleParam -obj $params -name "description" -type "str" -default ""
 
-        $permissionList = Get-AnsibleParam -obj $params -name "list" -type "bool" -default $false
-        $folderEnum = if ($permissionList) { "Unrestricted" } else { "AccessBased" }
+    $permissionList = Get-AnsibleParam -obj $params -name "list" -type "bool" -default $false
+    $folderEnum = if ($permissionList) { "Unrestricted" } else { "AccessBased" }
 
-        $permissionRead = Get-AnsibleParam -obj $params -name "read" -type "str" -default "" | NormalizeAccounts
-        $permissionChange = Get-AnsibleParam -obj $params -name "change" -type "str" -default "" | NormalizeAccounts
-        $permissionFull = Get-AnsibleParam -obj $params -name "full" -type "str" -default "" | NormalizeAccounts
-        $permissionDeny = Get-AnsibleParam -obj $params -name "deny" -type "str" -default "" | NormalizeAccounts
+    $permissionRead = Get-AnsibleParam -obj $params -name "read" -type "str" -default "" | NormalizeAccounts
+    $permissionChange = Get-AnsibleParam -obj $params -name "change" -type "str" -default "" | NormalizeAccounts
+    $permissionFull = Get-AnsibleParam -obj $params -name "full" -type "str" -default "" | NormalizeAccounts
+    $permissionDeny = Get-AnsibleParam -obj $params -name "deny" -type "str" -default "" | NormalizeAccounts
 
-        $cachingMode = Get-AnsibleParam -obj $params -name "caching_mode" -type "str" -default "Manual" -validateSet "BranchCache","Documents","Manual","None","Programs","Unknown"
-        $encrypt = Get-AnsibleParam -obj $params -name "encrypt" -type "bool" -default $false
+    $cachingMode = Get-AnsibleParam -obj $params -name "caching_mode" -type "str" -default "Manual" -validateSet "BranchCache","Documents","Manual","None","Programs","Unknown"
+    $encrypt = Get-AnsibleParam -obj $params -name "encrypt" -type "bool" -default $false
 
-        If (-Not (Test-Path -Path $path)) {
-            Fail-Json $result "$path directory does not exist on the host"
+    If (-Not (Test-Path -Path $path)) {
+        Fail-Json $result "$path directory does not exist on the host"
+    }
+
+    # normalize path and remove slash at the end
+    $path = (Get-Item $path).FullName -replace "\\$"
+
+    # need to (re-)create share
+    If (-not $share) {
+        if (-not $check_mode) {
+            New-SmbShare -Name $name -Path $path | Out-Null
         }
+        $share = Get-SmbShare -Name $name -ErrorAction SilentlyContinue
 
-        # normalize path and remove slash at the end
-        $path = (Get-Item $path).FullName -replace "\\$"
+        $result.changed = $true
+        $result.actions += "New-SmbShare -Name $name -Path $path"
+        # if in check mode we cannot run the below as no share exists so just
+        # exit early
+        if ($check_mode) {
+            Exit-Json -obj $result
+        }
+    }
+    If ($share.Path -ne $path) {
+        if (-not $check_mode) {
+            Remove-SmbShare -Force -Name $name | Out-Null
+            New-SmbShare -Name $name -Path $path | Out-Null
+        }
+        $share = Get-SmbShare -Name $name -ErrorAction SilentlyContinue
+        $result.changed = $true
+        $result.actions += "Remove-SmbShare -Force -Name $name"
+        $result.actions += "New-SmbShare -Name $name -Path $path"
+    }
 
-        # need to (re-)create share
-        If (-not $share) {
-            if (-not $check_mode) {
-                New-SmbShare -Name $name -Path $path | Out-Null
-            }
-            $share = Get-SmbShare -Name $name -ErrorAction SilentlyContinue
+    # updates
+    If ($share.Description -ne $description) {
+        if (-not $check_mode) {
+            Set-SmbShare -Force -Name $name -Description $description | Out-Null
+        }
+        $result.changed = $true
+        $result.actions += "Set-SmbShare -Force -Name $name -Description $description"
+    }
+    If ($share.FolderEnumerationMode -ne $folderEnum) {
+        if (-not $check_mode) {
+            Set-SmbShare -Force -Name $name -FolderEnumerationMode $folderEnum | Out-Null
+        }
+        $result.changed = $true
+        $result.actions += "Set-SmbShare -Force -Name $name -FolderEnumerationMode $folderEnum"
+    }
+    if ($share.CachingMode -ne $cachingMode) {
+        if (-not $check_mode) {
+            Set-SmbShare -Force -Name $name -CachingMode $cachingMode | Out-Null
+        }
+        $result.changed = $true
+        $result.actions += "Set-SmbShare -Force -Name $name -CachingMode $cachingMode"
+    }
+    if ($share.EncryptData -ne $encrypt) {
+        if (-not $check_mode) {
+            Set-SmbShare -Force -Name $name -EncryptData $encrypt | Out-Null
+        }
+        $result.changed = $true
+        $result.actions += "Set-SmbShare -Force -Name $name -EncryptData $encrypt"
+    }
 
-            $result.changed = $true
-            $result.actions += "New-SmbShare -Name $name -Path $path"
-        }
-        If ($share.Path -ne $path) {
-            if (-not $check_mode) {
-                Remove-SmbShare -Force -Name $name | Out-Null
-                New-SmbShare -Name $name -Path $path | Out-Null
-            }
-            $share = Get-SmbShare -Name $name -ErrorAction SilentlyContinue
-            $result.changed = $true
-            $result.actions += "Remove-SmbShare -Force -Name $name"
-            $result.actions += "New-SmbShare -Name $name -Path $path"
-        }
+    # clean permissions that imply others
+    ForEach ($user in $permissionFull) {
+        $permissionChange.remove($user) | Out-Null
+        $permissionRead.remove($user) | Out-Null
+    }
+    ForEach ($user in $permissionChange) {
+        $permissionRead.remove($user) | Out-Null
+    }
 
-        # updates
-        If ($share.Description -ne $description) {
-            if (-not $check_mode) {
-                Set-SmbShare -Force -Name $name -Description $description | Out-Null
-            }
-            $result.changed = $true
-            $result.actions += "Set-SmbShare -Force -Name $name -Description $description"
-        }
-        If ($share.FolderEnumerationMode -ne $folderEnum) {
-            if (-not $check_mode) {
-                Set-SmbShare -Force -Name $name -FolderEnumerationMode $folderEnum | Out-Null
-            }
-            $result.changed = $true
-            $result.actions += "Set-SmbShare -Force -Name $name -FolderEnumerationMode $folderEnum"
-        }
-        if ($share.CachingMode -ne $cachingMode) {
-            if (-not $check_mode) {
-                Set-SmbShare -Force -Name $name -CachingMode $cachingMode | Out-Null
-            }
-            $result.changed = $true
-            $result.actions += "Set-SmbShare -Force -Name $name -CachingMode $cachingMode"
-        }
-        if ($share.EncryptData -ne $encrypt) {
-            if (-not $check_mode) {
-                Set-SmbShare -Force -Name $name -EncryptData $encrypt | Out-Null
-            }
-            $result.changed = $true
-            $result.actions += "Set-SmbShare -Force -Name $name -EncryptData $encrypt"
-        }
-
-        # clean permissions that imply others
-        ForEach ($user in $permissionFull) {
-            $permissionChange.remove($user) | Out-Null
-            $permissionRead.remove($user) | Out-Null
-        }
-        ForEach ($user in $permissionChange) {
-            $permissionRead.remove($user) | Out-Null
-        }
-
-        # remove permissions
-        $permissions = Get-SmbShareAccess -Name $name
+    # remove permissions
+    $permissions = Get-SmbShareAccess -Name $name
+    if($rule_action -eq "set") {
         ForEach ($permission in $permissions) {
             If ($permission.AccessControlType -eq "Deny") {
                 $cim_count = 0
@@ -209,39 +215,53 @@ Try {
                 }
             }
         }
-
-        # add missing permissions
-        ForEach ($user in $permissionRead) {
-            if (-not $check_mode) {
-                Grant-SmbShareAccess -Force -Name $name -AccountName $user -AccessRight "Read" | Out-Null
+    } ElseIf ($rule_action -eq "add") {
+        ForEach($permission in $permissions) {
+            If ($permission.AccessControlType -eq "Deny") {
+                If ($permissionDeny.Contains($permission.AccountName)) {
+                    $permissionDeny.Remove($permission.AccountName)
+                }
+            } ElseIf ($permission.AccessControlType -eq "Allow") {
+                If ($permissionFull.Contains($permission.AccountName) -and $permission.AccessRight -eq "Full") {
+                    $permissionFull.Remove($permission.AccountName)
+                } ElseIf ($permissionChange.Contains($permission.AccountName) -and $permission.AccessRight -eq "Change") {
+                    $permissionChange.Remove($permission.AccountName)
+                } ElseIf ($permissionRead.Contains($permission.AccountName) -and $permission.AccessRight -eq "Read") {
+                    $permissionRead.Remove($permission.AccountName)
+                }
             }
-            $result.changed = $true
-            $result.actions += "Grant-SmbShareAccess -Force -Name $name -AccountName $user -AccessRight Read"
-        }
-        ForEach ($user in $permissionChange) {
-            if (-not $check_mode) {
-                Grant-SmbShareAccess -Force -Name $name -AccountName $user -AccessRight "Change" | Out-Null
-            }
-            $result.changed = $true
-            $result.actions += "Grant-SmbShareAccess -Force -Name $name -AccountName $user -AccessRight Change"
-        }
-        ForEach ($user in $permissionFull) {
-            if (-not $check_mode) {
-                Grant-SmbShareAccess -Force -Name $name -AccountName $user -AccessRight "Full" | Out-Null
-            }
-            $result.changed = $true
-            $result.actions += "Grant-SmbShareAccess -Force -Name $name -AccountName $user -AccessRight Full"
-        }
-        ForEach ($user in $permissionDeny) {
-            if (-not $check_mode) {
-                Block-SmbShareAccess -Force -Name $name -AccountName $user | Out-Null
-            }
-            $result.changed = $true
-            $result.actions += "Block-SmbShareAccess -Force -Name $name -AccountName $user"
         }
     }
-} Catch {
-    Fail-Json $result "an error occurred when attempting to create share $($name): $($_.Exception.Message)"
+
+    # add missing permissions
+    ForEach ($user in $permissionRead) {
+        if (-not $check_mode) {
+            Grant-SmbShareAccess -Force -Name $name -AccountName $user -AccessRight "Read" | Out-Null
+        }
+        $result.changed = $true
+        $result.actions += "Grant-SmbShareAccess -Force -Name $name -AccountName $user -AccessRight Read"
+    }
+    ForEach ($user in $permissionChange) {
+        if (-not $check_mode) {
+            Grant-SmbShareAccess -Force -Name $name -AccountName $user -AccessRight "Change" | Out-Null
+        }
+        $result.changed = $true
+        $result.actions += "Grant-SmbShareAccess -Force -Name $name -AccountName $user -AccessRight Change"
+    }
+    ForEach ($user in $permissionFull) {
+        if (-not $check_mode) {
+            Grant-SmbShareAccess -Force -Name $name -AccountName $user -AccessRight "Full" | Out-Null
+        }
+        $result.changed = $true
+        $result.actions += "Grant-SmbShareAccess -Force -Name $name -AccountName $user -AccessRight Full"
+    }
+    ForEach ($user in $permissionDeny) {
+        if (-not $check_mode) {
+            Block-SmbShareAccess -Force -Name $name -AccountName $user | Out-Null
+        }
+        $result.changed = $true
+        $result.actions += "Block-SmbShareAccess -Force -Name $name -AccountName $user"
+    }
 }
 
 Exit-Json $result

@@ -9,7 +9,7 @@ __metaclass__ = type
 
 ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'status': ['preview'],
-                    'supported_by': 'community'}
+                    'supported_by': 'certified'}
 
 DOCUMENTATION = r'''
 ---
@@ -17,45 +17,55 @@ module: aci_switch_policy_vpc_protection_group
 short_description: Manage switch policy explicit vPC protection groups (fabric:ExplicitGEp, fabric:NodePEp).
 description:
 - Manage switch policy explicit vPC protection groups on Cisco ACI fabrics.
-notes:
-- More information about the internal APIC classes B(fabric:ExplicitGEp) and B(fabric:NodePEp) from
-  L(the APIC Management Information Model reference,https://developer.cisco.com/docs/apic-mim-ref/).
-author:
-- Bruno Calogero (@brunocalogero)
 version_added: '2.5'
 options:
   protection_group:
     description:
     - The name of the Explicit vPC Protection Group.
-    aliases: [ name, protection_group_name ]
+    type: str
     required: yes
+    aliases: [ name, protection_group_name ]
   protection_group_id:
     description:
     - The Explicit vPC Protection Group ID.
-    required: yes
     type: int
+    required: yes
     aliases: [ id ]
   vpc_domain_policy:
     description:
     - The vPC domain policy to be associated with the Explicit vPC Protection Group.
+    type: str
     aliases: [ vpc_domain_policy_name ]
   switch_1_id:
     description:
     - The ID of the first Leaf Switch for the Explicit vPC Protection Group.
-    required: yes
     type: int
+    required: yes
   switch_2_id:
     description:
     - The ID of the Second Leaf Switch for the Explicit vPC Protection Group.
-    required: yes
     type: int
+    required: yes
   state:
     description:
     - Use C(present) or C(absent) for adding or removing.
     - Use C(query) for listing an object or multiple objects.
+    type: str
     choices: [ absent, present, query ]
     default: present
+  name_alias:
+    version_added: '2.10'
+    description:
+    - The alias for the current object. This relates to the nameAlias field in ACI.
+    type: str
 extends_documentation_fragment: aci
+seealso:
+- module: aci_switch_policy_leaf_profile
+- name: APIC Management Information Model reference
+  description: More information about the internal APIC classes B(fabric:ExplicitGEp) and B(fabric:NodePEp).
+  link: https://developer.cisco.com/docs/apic-mim-ref/
+author:
+- Bruno Calogero (@brunocalogero)
 '''
 
 EXAMPLES = r'''
@@ -132,7 +142,7 @@ error:
 raw:
   description: The raw output returned by the APIC REST API (xml or json)
   returned: parse error
-  type: string
+  type: str
   sample: '<?xml version="1.0" encoding="UTF-8"?><imdata totalCount="1"><error code="122" text="unknown managed object class foo"/></imdata>'
 sent:
   description: The actual/minimal configuration pushed to the APIC
@@ -181,17 +191,17 @@ proposed:
 filter_string:
   description: The filter string used for the request
   returned: failure or debug
-  type: string
+  type: str
   sample: ?rsp-prop-include=config-only
 method:
   description: The HTTP method used for the request to the APIC
   returned: failure or debug
-  type: string
+  type: str
   sample: POST
 response:
   description: The HTTP response from the APIC
   returned: failure or debug
-  type: string
+  type: str
   sample: OK (30 bytes)
 status:
   description: The HTTP status from the APIC
@@ -201,12 +211,12 @@ status:
 url:
   description: The HTTP url used for the request to the APIC
   returned: failure or debug
-  type: string
+  type: str
   sample: https://10.11.12.13/api/mo/uni/tn-production.json
 '''
 
-from ansible.module_utils.network.aci.aci import ACIModule, aci_argument_spec
 from ansible.module_utils.basic import AnsibleModule
+from ansible.module_utils.network.aci.aci import ACIModule, aci_argument_spec
 
 
 def main():
@@ -218,6 +228,7 @@ def main():
         switch_1_id=dict(type='int'),
         switch_2_id=dict(type='int'),
         state=dict(type='str', default='present', choices=['absent', 'present', 'query']),
+        name_alias=dict(type='str'),
     )
 
     module = AnsibleModule(
@@ -229,12 +240,13 @@ def main():
         ],
     )
 
-    protection_group = module.params['protection_group']
-    protection_group_id = module.params['protection_group_id']
-    vpc_domain_policy = module.params['vpc_domain_policy']
-    switch_1_id = module.params['switch_1_id']
-    switch_2_id = module.params['switch_2_id']
-    state = module.params['state']
+    protection_group = module.params.get('protection_group')
+    protection_group_id = module.params.get('protection_group_id')
+    vpc_domain_policy = module.params.get('vpc_domain_policy')
+    switch_1_id = module.params.get('switch_1_id')
+    switch_2_id = module.params.get('switch_2_id')
+    state = module.params.get('state')
+    name_alias = module.params.get('name_alias')
 
     aci = ACIModule(module)
     aci.construct_url(
@@ -255,6 +267,7 @@ def main():
             class_config=dict(
                 name=protection_group,
                 id=protection_group_id,
+                nameAlias=name_alias,
             ),
             child_configs=[
                 dict(

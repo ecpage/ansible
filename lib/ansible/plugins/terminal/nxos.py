@@ -30,7 +30,8 @@ from ansible.module_utils._text import to_bytes, to_text
 class TerminalModule(TerminalBase):
 
     terminal_stdout_re = [
-        re.compile(br'[\r\n](?!\s*<)?(\x1b\S+)*[a-zA-Z_0-9]{1}[a-zA-Z0-9-_.]*[>|#](?:\s*)(\x1b\S+)*$'),
+        re.compile(
+            br'[\r\n](?!\s*<)?(\x1b\S+)*[a-zA-Z_0-9]{1}[a-zA-Z0-9-_.]*[>|#](?:\s*)(\x1b\S+)*$'),
         re.compile(br'[\r\n]?[a-zA-Z0-9]{1}[a-zA-Z0-9-_.]*\(.+\)#(?:\s*)$')
     ]
 
@@ -48,7 +49,13 @@ class TerminalModule(TerminalBase):
         re.compile(br"unknown command"),
         re.compile(br"user not present"),
         re.compile(br"invalid (.+?)at '\^' marker", re.I),
-        re.compile(br"baud rate of console should be (\d*) to increase severity level", re.I),
+        re.compile(br"configuration not allowed .+ at '\^' marker"),
+        re.compile(
+            br"[B|b]aud rate of console should be.* (\d*) to increase [a-z]* level", re.I),
+        re.compile(br"cannot apply non-existing acl policy to interface", re.I),
+        re.compile(br"Duplicate sequence number", re.I),
+        re.compile(
+            br"Cannot apply ACL to an interface that is a port-channel member", re.I)
     ]
 
     def on_become(self, passwd=None):
@@ -64,20 +71,27 @@ class TerminalModule(TerminalBase):
         if '15' in out:
             return
 
+        if self.validate_user_role():
+            return
+
         cmd = {u'command': u'enable'}
         if passwd:
-            cmd[u'prompt'] = to_text(r"(?i)[\r\n]?Password: $", errors='surrogate_or_strict')
+            cmd[u'prompt'] = to_text(
+                r"(?i)[\r\n]?Password: $", errors='surrogate_or_strict')
             cmd[u'answer'] = passwd
             cmd[u'prompt_retry_check'] = True
 
         try:
-            self._exec_cli_command(to_bytes(json.dumps(cmd), errors='surrogate_or_strict'))
+            self._exec_cli_command(
+                to_bytes(json.dumps(cmd), errors='surrogate_or_strict'))
             prompt = self._get_prompt()
             if prompt is None or not prompt.strip().endswith(b'enable#'):
-                raise AnsibleConnectionFailure('failed to elevate privilege to enable mode still at prompt [%s]' % prompt)
+                raise AnsibleConnectionFailure(
+                    'failed to elevate privilege to enable mode still at prompt [%s]' % prompt)
         except AnsibleConnectionFailure as e:
             prompt = self._get_prompt()
-            raise AnsibleConnectionFailure('unable to elevate privilege to enable mode, at prompt [%s] with error: %s' % (prompt, e.message))
+            raise AnsibleConnectionFailure(
+                'unable to elevate privilege to enable mode, at prompt [%s] with error: %s' % (prompt, e.message))
 
     def on_unbecome(self):
         prompt = self._get_prompt()
@@ -98,3 +112,16 @@ class TerminalModule(TerminalBase):
                 self._exec_cli_command(cmd)
         except AnsibleConnectionFailure:
             raise AnsibleConnectionFailure('unable to set terminal parameters')
+
+    def validate_user_role(self):
+        user = self._connection._play_context.remote_user
+
+        out = self._exec_cli_command('show user-account %s' % user)
+        out = to_text(out, errors='surrogate_then_replace').strip()
+
+        match = re.search(r'roles:(.+)$', out, re.M)
+        if match:
+            roles = match.group(1).split()
+            if 'network-admin' in roles:
+                return True
+            return False

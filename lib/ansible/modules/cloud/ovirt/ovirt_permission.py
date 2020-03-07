@@ -107,6 +107,16 @@ EXAMPLES = '''
     object_name: mydatacenter
     quota_name: myquota
     role: QuotaConsumer
+
+- name: Assign QuotaConsumer role to group
+  ovirt_permissions:
+    state: present
+    group_name: group1
+    authz_name: example.com-authz
+    object_type: data_center
+    object_name: mydatacenter
+    quota_name: myquota
+    role: QuotaConsumer
 '''
 
 RETURN = '''
@@ -273,9 +283,6 @@ def main():
         argument_spec=argument_spec,
         supports_check_mode=True,
     )
-
-    if module._name == 'ovirt_permissions':
-        module.deprecate("The 'ovirt_permissions' module is being renamed 'ovirt_permission'", version=2.8)
 
     check_sdk(module)
 

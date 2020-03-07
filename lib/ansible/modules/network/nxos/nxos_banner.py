@@ -88,17 +88,17 @@ commands:
 
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.network.nxos.nxos import load_config, run_commands
-from ansible.module_utils.network.nxos.nxos import nxos_argument_spec, check_args
+from ansible.module_utils.network.nxos.nxos import nxos_argument_spec
 import re
 
 
 def execute_show_command(module, command):
-    format = 'json'
+    format = 'text'
     cmds = [{
         'command': command,
         'output': format,
     }]
-    output = run_commands(module, cmds, check_rc='retry_json')
+    output = run_commands(module, cmds)
     return output
 
 
@@ -177,8 +177,6 @@ def main():
                            supports_check_mode=True)
 
     warnings = list()
-
-    check_args(module, warnings)
 
     result = {'changed': False}
     if warnings:

@@ -19,7 +19,7 @@
 from __future__ import (absolute_import, division, print_function)
 __metaclass__ = type
 
-from ansible.compat.tests.mock import patch
+from units.compat.mock import patch
 from ansible.modules.network.eos import eos_system
 from units.modules.utils import set_module_args
 from .eos_module import TestEosModule, load_fixture
@@ -107,4 +107,4 @@ class TestEosSystemModule(TestEosModule):
     def test_eos_system_missing_vrf(self):
         name_servers = dict(server='8.8.8.8', vrf='missing')
         set_module_args(dict(name_servers=name_servers))
-        result = self.execute_module(failed=True)
+        self.execute_module(failed=True)

@@ -23,23 +23,24 @@ import sys
 import copy
 
 from ansible import constants as C
-from ansible.plugins.action.normal import ActionModule as _ActionModule
+from ansible.plugins.action.network import ActionModule as ActionNetworkModule
 from ansible.module_utils.network.sros.sros import sros_provider_spec
 from ansible.module_utils.network.common.utils import load_provider
+from ansible.utils.display import Display
 
-try:
-    from __main__ import display
-except ImportError:
-    from ansible.utils.display import Display
-    display = Display()
+display = Display()
 
 
-class ActionModule(_ActionModule):
+class ActionModule(ActionNetworkModule):
 
     def run(self, tmp=None, task_vars=None):
         del tmp  # tmp no longer has any effect
 
-        if self._play_context.connection == 'network_cli':
+        module_name = self._task.action.split('.')[-1]
+        persistent_connection = self._play_context.connection.split('.')[-1]
+
+        self._config_module = True if module_name == 'sros_config' else False
+        if persistent_connection == 'network_cli':
             provider = self._task.args.get('provider', {})
             if any(provider.values()):
                 display.warning('provider is unnecessary when using network_cli and will be ignored')
@@ -58,7 +59,7 @@ class ActionModule(_ActionModule):
             command_timeout = int(provider['timeout'] or C.PERSISTENT_COMMAND_TIMEOUT)
 
             display.vvv('using connection plugin %s (was local)' % pc.connection, pc.remote_addr)
-            connection = self._shared_loader_obj.connection_loader.get('persistent', pc, sys.stdin)
+            connection = self._shared_loader_obj.connection_loader.get('persistent', pc, sys.stdin, task_uuid=self._task._uuid)
             connection.set_options(direct={'persistent_command_timeout': command_timeout})
 
             socket_path = connection.run()

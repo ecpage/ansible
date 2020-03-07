@@ -28,8 +28,8 @@
 import json
 
 from ansible.module_utils._text import to_text
-from ansible.module_utils.basic import env_fallback, return_values
-from ansible.module_utils.network.common.utils import to_list, ComplexList
+from ansible.module_utils.basic import env_fallback
+from ansible.module_utils.network.common.utils import to_list
 from ansible.module_utils.connection import Connection, ConnectionError
 
 _DEVICE_CONFIGS = {}
@@ -45,20 +45,8 @@ ios_provider_spec = {
     'timeout': dict(type='int')
 }
 ios_argument_spec = {
-    'provider': dict(type='dict', options=ios_provider_spec),
+    'provider': dict(type='dict', options=ios_provider_spec, removed_in_version=2.14),
 }
-
-ios_top_spec = {
-    'host': dict(removed_in_version=2.9),
-    'port': dict(removed_in_version=2.9, type='int'),
-    'username': dict(removed_in_version=2.9),
-    'password': dict(removed_in_version=2.9, no_log=True),
-    'ssh_keyfile': dict(removed_in_version=2.9, type='path'),
-    'authorize': dict(fallback=(env_fallback, ['ANSIBLE_NET_AUTHORIZE']), type='bool'),
-    'auth_pass': dict(removed_in_version=2.9, no_log=True),
-    'timeout': dict(removed_in_version=2.9, type='int')
-}
-ios_argument_spec.update(ios_top_spec)
 
 
 def get_provider_argspec():
@@ -90,10 +78,6 @@ def get_capabilities(module):
     return module._ios_capabilities
 
 
-def check_args(module, warnings):
-    pass
-
-
 def get_defaults_flag(module):
     connection = get_connection(module)
     try:
@@ -104,7 +88,13 @@ def get_defaults_flag(module):
 
 
 def get_config(module, flags=None):
-    flag_str = ' '.join(to_list(flags))
+    flags = to_list(flags)
+
+    section_filter = False
+    if flags and 'section' in flags[-1]:
+        section_filter = True
+
+    flag_str = ' '.join(flags)
 
     try:
         return _DEVICE_CONFIGS[flag_str]
@@ -113,20 +103,14 @@ def get_config(module, flags=None):
         try:
             out = connection.get_config(flags=flags)
         except ConnectionError as exc:
-            module.fail_json(msg=to_text(exc, errors='surrogate_then_replace'))
+            if section_filter:
+                # Some ios devices don't understand `| section foo`
+                out = get_config(module, flags=flags[:-1])
+            else:
+                module.fail_json(msg=to_text(exc, errors='surrogate_then_replace'))
         cfg = to_text(out, errors='surrogate_then_replace').strip()
         _DEVICE_CONFIGS[flag_str] = cfg
         return cfg
-
-
-def to_commands(module, commands):
-    spec = {
-        'command': dict(key=True),
-        'prompt': dict(),
-        'answer': dict()
-    }
-    transform = ComplexList(spec, module)
-    return transform(commands)
 
 
 def run_commands(module, commands, check_rc=True):
@@ -178,6 +162,10 @@ def normalize_interface(name):
         if_type = 'port-channel'
     elif name.lower().startswith('nv'):
         if_type = 'nve'
+    elif name.lower().startswith('twe'):
+        if_type = 'TwentyFiveGigE'
+    elif name.lower().startswith('hu'):
+        if_type = 'HundredGigE'
     else:
         if_type = None
 

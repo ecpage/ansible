@@ -6,7 +6,7 @@ from ansible.modules.storage.netapp.netapp_e_asup import Asup
 from units.modules.utils import AnsibleExitJson, AnsibleFailJson, ModuleTestCase, set_module_args
 
 __metaclass__ = type
-from ansible.compat.tests import mock
+from units.compat import mock
 
 
 class AsupTest(ModuleTestCase):
@@ -55,7 +55,7 @@ class AsupTest(ModuleTestCase):
 
         with mock.patch(self.REQ_FUNC, return_value=(200, expected)):
             config = asup.get_configuration()
-            self.assertEquals(config, expected)
+            self.assertEqual(config, expected)
 
     def test_update_configuration(self):
         """Validate retrieving the ASUP configuration"""
@@ -149,9 +149,9 @@ class AsupTest(ModuleTestCase):
         asup = Asup()
 
         self.assertTrue(asup.asup)
-        self.assertEquals(asup.days, ["sunday", "monday", "tuesday"]),
-        self.assertEquals(asup.start, 1200)
-        self.assertEquals(asup.end, 1439)
+        self.assertEqual(asup.days, ["sunday", "monday", "tuesday"]),
+        self.assertEqual(asup.start, 1200)
+        self.assertEqual(asup.end, 1439)
 
     def test_init_schedule_invalid(self):
         """Validate updating ASUP with invalid schedule fails test."""
